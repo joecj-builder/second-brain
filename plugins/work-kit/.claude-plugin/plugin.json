@@ -1,0 +1,10 @@
+{
+  "name": "work-kit",
+  "version": "0.1.0",
+  "description": "Extras for a work machine's second brain: markdown to Google Doc, the Hex platform, and publishing a scrubbed, shareable copy of the vault.",
+  "author": {
+    "name": "josephcoz",
+    "url": "https://github.com/josephcoz"
+  },
+  "repository": "https://github.com/josephcoz/second-brain"
+}

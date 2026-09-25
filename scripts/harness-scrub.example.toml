@@ -196,21 +196,15 @@ label   = "vendor credential prefix"
 # ~/.claude also holds session transcripts, telemetry, and caches full of work
 # conversation content. Name what goes in; never copy-everything-and-exclude.
 #
+# Skills and hooks are no longer mirrored here: they ship in plugins/ and the
+# plugin is the source of truth. This only covers what a plugin can't carry.
+#
 # modes:
 #   template          substitute and copy
 #   json_permissions  drop work-specific permission entries, then substitute
 #   stub              do not copy the source; write `stub_text` instead
 #   zshrc_function    extract the claude() function from ~/.zshrc
 
-[[files]]
-src  = "CLAUDE.md"
-dst  = "CLAUDE.md"
-mode = "template"
-
-# The portable value in settings.json is the hooks / statusLine / effortLevel
-# config. Its allow-list is paths into work repos and internal query tooling,
-# which names internal systems even after path templating — so it is filtered,
-# not templated.
 [[files]]
 src  = "settings.json"
 dst  = "settings.json"
@@ -232,65 +226,10 @@ drop_patterns = [
 ]
 
 [[files]]
-src  = "personal-settings.json"
-dst  = "personal-settings.json"
-mode = "template"
-
-[[files]]
-src  = "work-settings.json"
-dst  = "work-settings.json"
-mode = "template"
-
-[[files]]
-src  = "hooks/session-start-context.sh"
-dst  = "hooks/session-start-context.sh"
-mode = "template"
-
-[[files]]
 src  = "statusline-command.sh"
 dst  = "statusline-command.sh"
 mode = "template"
 
-[[files]]
-src  = "skills/document/SKILL.md"
-dst  = "skills/document/SKILL.md"
-mode = "template"
-
-[[files]]
-src  = "skills/dream/SKILL.md"
-dst  = "skills/dream/SKILL.md"
-mode = "template"
-
-# Example of a skill that CANNOT be templated. Anything embedding brand assets
-# — a Drive file ID for a branded deck template, an employer's hex palette —
-# survives name-substitution intact. Ship the approach, not the assets.
-[[files]]
-src  = "skills/google-slides/SKILL.md"
-dst  = "skills/google-slides/README.md"
-mode = "stub"
-stub_text = """
-# google-slides (not published)
-
-The live version of this skill builds decks against a specific employer's
-branded template and is not included here: it embeds a Drive file ID and the
-brand's hex palette, neither of which a name-substitution can remove.
-
-The approach generalizes: cache the org's .pptx template in your work repo,
-build on its own layouts with python-pptx so theme colors and fonts come
-through for free, keep brand constants in one module, and upload with
-mimeType application/vnd.google-apps.presentation so it converts to native
-Slides.
-"""
-
-[[files]]
-src  = "~/.zshrc"
-dst  = "zshrc-claude-function.sh"
-mode = "zshrc_function"
-
-# launchd does not expand "~". The global rules rewrite the home path to a
-# tilde, which is right for shell and prose but produces a plist that looks
-# valid and silently fails to load. Convert it back to an explicit placeholder
-# so the user must supply an absolute path.
 [[files]]
 src_glob = "~/Library/LaunchAgents/com.jane.*.plist"
 dst_dir  = "launchd"

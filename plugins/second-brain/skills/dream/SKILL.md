@@ -6,7 +6,7 @@ description: >
   notes, resolves contradictions, surfaces insights from the week's
   sessions, regenerates the Topic-Index, and trims MEMORY.md back under
   its size limit. Runs NON-DESTRUCTIVELY on a git branch you review, then
-  adopt or discard. Use when {{user}} says "/dream", "defrag the vault",
+  adopt or discard. Use when the user says "/dream", "defrag the vault",
   "consolidate memory", "clean up the second brain", or on the weekly
   schedule. Modes: default (full weekly consolidation), --quick (fast
   MEMORY.md trim + obvious merges), --notify (Slack DM the report; the
@@ -31,10 +31,10 @@ store stays fast for Claude to consume.
 
 ## Step 0 — Resolve context, mode, and guards
 
-1. **Context → vault + host repo** (from `CLAUDE_CONTEXT`):
-   - `work` (or unset) → vault `{{work_vault}}`, host repo `{{work_automation_repo}}`.
-   - `personal` → vault `{{personal_vault}}`, host repo `{{personal_automation_repo}}`.
-   Read `<host repo>/config.yaml` for `vault.path`, `slack.dm_channel`, `timezone`.
+1. **Vault + config.** The vault is in the session-start context ("Second brain
+   vault: …"). Read `~/.claude/second-brain/config.env` for `SECOND_BRAIN_VAULT`
+   (fallback), `SECOND_BRAIN_TIMEZONE`, and `SECOND_BRAIN_SLACK_DM`. Call the
+   vault `<vault>`.
 2. **Parse args:** `--quick` (fast mode), `--notify` (send Slack DM — the weekly
    scheduled run passes this; on-demand `/dream` must NOT), `--since YYYY-MM-DD`
    (override the window).
@@ -43,7 +43,7 @@ store stays fast for Claude to consume.
      *"Vault isn't git-backed yet — run `git init` in `<vault>` first. Dreams need git for the non-destructive review branch."* Stop.
    - Working tree should be clean-ish on `main`: `git -C <vault> status --porcelain`.
      If there are uncommitted changes, commit them first (`pre-dream snapshot`) so
-     the dream branch diffs cleanly. Tell {{user}} you did this.
+     the dream branch diffs cleanly. Tell the user you did this.
    - No existing dream branch for this period (see Step 1); if one exists, ask
      whether to resume it or start fresh.
 
@@ -67,8 +67,9 @@ path during a dream.
 - **The memory store** (read from `$DREAM`): `Memory/MEMORY.md`, `Topics/`,
   `People/`, `DataContext/`. This is what gets reorganized.
 - **The sessions** (read-only, NEVER rewritten — the evidence the dream mines):
-  - This window's Claude Code transcripts: `~/.claude/projects/-Users-{{unix_user_dashed}}/*.jsonl`
-    modified within the window.
+  - This window's Claude Code transcripts: `~/.claude/projects/*/*.jsonl`
+    modified within the window (`find ~/.claude/projects -name '*.jsonl' -newermt <start>`).
+  - This window's `Sessions/` handoffs (written by `/document --auto`).
   - This window's `Journal/` daily entries and `Meetings/` notes.
   Window = `--since` if given, else since the last dream (most recent
   `dream/*` merge or `Journal/*-rollup.md`), else the current ISO week.
@@ -114,12 +115,13 @@ Commit the consolidation to the branch:
 
 ## Step 4 — Weekly rollup (full mode only; skip in --quick)
 
-Write the episodic digest `Journal/<YYYY-Wxx>-rollup.md` following
-`<vault>/DataContext/Weekly-Rollup-Template.md`. Include: week's theme, key
+Write the episodic digest `Journal/<YYYY-Wxx>-rollup.md`, following
+`<vault>/DataContext/Weekly-Rollup-Template.md` if it exists. Include: week's theme, key
 deliverables by topic, decisions, blockers, people, topic-node updates,
-`## Open Questions for {{user}}` (recurring gaps — capped at 10), `## Questions
-Resolved This Week` (scan `DataContext/kickoff-resolutions.md` for `→ Written to`
-this week), and staleness escalations (questions appearing 3+ consecutive days).
+`## Open Questions for the user` (recurring gaps — capped at 10), `## Questions
+Resolved This Week` (if `DataContext/kickoff-resolutions.md` exists, scan it for
+`→ Written to` this week), and staleness escalations (questions appearing 3+
+consecutive days).
 This is an append (new file) — the rollup never rewrites prior journals.
 Commit it.
 
@@ -129,7 +131,7 @@ Write `$DREAM/Dream-Report.md` AND print it to the terminal. Open with a
 **fragmentation summary**, then details:
 
 ```markdown
-# Dream Report — <YYYY-Wxx> — <context>
+# Dream Report — <YYYY-Wxx>
 
 ## Defrag summary
 - Duplicate clusters merged: N   (files deleted: M)
@@ -151,22 +153,23 @@ Write `$DREAM/Dream-Report.md` AND print it to the terminal. Open with a
 
 ## Review
 - Diff:    git -C <vault> diff main..dream/<YYYY-Wxx>
-- Adopt:   bash <host repo>/scripts/tasks/adopt-dream.sh <YYYY-Wxx>
+- Adopt:   bash ${CLAUDE_PLUGIN_ROOT}/scripts/adopt-dream.sh <YYYY-Wxx>
 - Discard: git -C <vault> worktree remove ../<...>-dream-<YYYY-Wxx> && git -C <vault> branch -D dream/<YYYY-Wxx>
 ```
 
 ## Step 6 — Notify (ONLY if --notify)
 
 If and only if `--notify` was passed (weekly scheduled run), send the Defrag
-summary + Review block as a Slack DM to `slack.dm_channel` from config. On
+summary + Review block as a Slack DM to `SECOND_BRAIN_SLACK_DM` (via the Slack
+connector). If it isn't set or no Slack tool is available, say so and skip. On
 on-demand `/dream`, send nothing to Slack — the terminal + `Dream-Report.md`
 are the whole output.
 
 ## Step 7 — Hand off (do NOT merge)
 
 Leave the branch + worktree for review. Print the Review block. The dream never
-merges itself — adoption is {{user}}'s explicit `adopt-dream.sh` (or merge), discard
-is deleting the branch. (The Monday daily-kickoff surfaces any pending dream.)
+merges itself — adoption is the user's explicit `adopt-dream.sh` (or merge),
+discard is `adopt-dream.sh <YYYY-Wxx> --discard`.
 
 ---
 
@@ -176,15 +179,15 @@ Skip Steps 2's session-mining, Step 4 (rollup), and Step 5's insight surfacing.
 Do only: trim `MEMORY.md` under limit, promote the `Memory/` inbox, merge
 obvious duplicates, regenerate `Topic-Index.md`. Still runs on the worktree/branch
 and still writes a (shorter) Dream Report. For when the manifest is bloating and
-{{user}} wants a fast defrag.
+the user wants a fast defrag.
 
 ## Rules / safety
 
 - **Never edit the live vault working tree during a dream** — only the worktree.
 - **Never rewrite `Journal/` or `Meetings/`** — episodic record is read-only.
 - **Archive whole notes, hard-delete only merged duplicates** (locked prune policy).
-- **Never merge the branch yourself.** Adoption and discard are {{user}}'s.
+- **Never merge the branch yourself.** Adoption and discard are the user's.
 - **Be concrete and conservative:** if unsure whether two notes are truly
   duplicates or whether a note is stale, leave it and note it in the report under
-  a `## Needs {{user}}'s call` section rather than acting.
+  a `## Needs the user's call` section rather than acting.
 - Don't fabricate. Surface gaps as Open Questions; don't invent content.

@@ -36,7 +36,6 @@ PLACEHOLDER = re.compile(r"\{\{([a-z_]+)\}\}")
 # Files that belong at $HOME rather than inside ~/.claude, and where they go.
 # Everything else in harness/ maps into ~/.claude/ at the same relative path.
 HOME_TARGETS = {
-    "zshrc-claude-function.sh": None,   # pasted by hand — see REBUILD.md
     "launchd": None,                    # installed separately via launchctl
 }
 
@@ -135,7 +134,6 @@ def main() -> int:
         print(f"  -> ~/.claude/{rel_name}")
 
     print("\nStill to do by hand (see REBUILD.md):")
-    print("  - paste zshrc-claude-function.sh into ~/.zshrc")
     print("  - copy launchd/*.plist into ~/Library/LaunchAgents and launchctl load them")
     return 0
 

@@ -1,65 +1,83 @@
 # Second Brain
 
-An AI-powered work knowledge base built on Claude Code and Obsidian. Second Brain automatically captures your meetings, emails, Slack threads, and Jira work into a structured Obsidian vault, then synthesizes daily journals, weekly rollups, and actionable kickoff briefs -- all driven by scheduled Claude Code tasks and MCP connectors.
+An Obsidian vault as Claude Code's persistent memory store. Sessions are
+ephemeral; the vault is permanent. Claude reads it before guessing, writes
+durable facts into it as it learns them, hands off each session into it, and
+periodically consolidates it on a review branch.
 
-## Architecture
+This repo is a Claude Code **plugin marketplace** with two plugins:
+
+| Plugin | Install on | What it adds |
+|---|---|---|
+| `second-brain` | every machine | `/second-brain:protocol` (lookup and write rules), `/second-brain:document`, `/second-brain:dream`, `/second-brain:setup`, a SessionStart hook that names the vault, and an automatic `/document` when a session ends |
+| `work-kit` | work machines | `/work-kit:make-google-doc`, `/work-kit:hex`, `/work-kit:share-scrubbed-brain` |
+
+One machine has one second brain. The vault is picked once, at setup.
+
+## Install
+
+```bash
+# 1. Get the vault onto the machine (or skip; setup can create a new one)
+git clone <your-vault-repo> ~/obsidian-vaults/<Name>
+```
+
+Then in Claude Code:
 
 ```
-second-brain/              # This repo -- the shared framework
-  vault-template/          # Default vault folder structure
-  scripts/                 # Prompt templates for each scheduled task
-  scheduled-tasks/         # Task definitions (cron schedules, prompts)
-  docs/                    # Detailed guides
-
-work-automation/           # Your private repo -- personal config + overrides
-  config.yaml              # Filled-in copy of config.example.yaml
-  skills/                  # Domain-specific skills (e.g., Hex, dbt)
-  task-overrides/          # Custom prompt tweaks per task
+/plugin marketplace add josephcoz/second-brain
+/plugin install second-brain@second-brain
+/plugin install work-kit@second-brain        # work machines only
+/second-brain:setup
 ```
 
-Scheduled Claude Code tasks read your `config.yaml`, pull data from MCP connectors (Slack, Google Calendar, Granola, Gmail, Jira), and write structured Markdown into your Obsidian vault. A project-level `CLAUDE.md` gives Claude persistent context about your role, preferences, and vault conventions.
+`/second-brain:setup` writes `~/.claude/second-brain/config.env`, points
+auto-memory at `<vault>/Memory`, and (for a new vault) scaffolds it from
+`plugins/second-brain/vault-template/` and runs `git init`. Start a new
+session afterwards; the first lines of context should name the vault.
 
-## Prerequisites
+Update later with `/plugin update second-brain@second-brain`.
 
-- **Obsidian** with a vault dedicated to work notes
-- **Claude Code** CLI installed and authenticated
-- **MCP connectors** enabled in Claude Code for:
-  - Slack
-  - Google Calendar
-  - Granola (meeting transcripts)
-  - Gmail
-  - Atlassian / Jira
+## How it works
 
-## Quick Start
+- **SessionStart** injects the vault path and tells Claude to load
+  `/second-brain:protocol` before touching the vault.
+- **Auto-memory** writes to `<vault>/Memory/`; `MEMORY.md` there is the
+  manifest Claude loads every session.
+- **`/document`** writes a handoff (plan file, `NEXT_SESSION.md`, or the vault)
+  and persists durable facts into the vault graph.
+- **Auto-document**: when a session with at least 3 prompts ends, a
+  SessionEnd hook starts a detached headless run that resumes it and runs
+  `/second-brain:document --auto`. That writes `Sessions/YYYY-MM-DD <slug>.md`
+  in the vault and commits it. The log is `~/.claude/second-brain/auto-document.log`.
+  Each qualifying session costs one extra headless run; turn it off with
+  `SECOND_BRAIN_AUTODOC=false` in the config.
+- **`/dream`** consolidates the vault (dedup, archive, resolve contradictions,
+  trim `MEMORY.md`) on a `dream/<week>` git branch you adopt or discard.
 
-1. **Fork this repo** (or clone it to `~/github-projects/second-brain/`).
+## What the plugins don't carry
 
-2. **Copy the config template** to your private work-automation repo:
-   ```bash
-   cp config.example.yaml ~/github-projects/work-automation/config.yaml
-   ```
+Plugins can ship skills and hooks, but not user settings, shell config,
+scheduled jobs, or secrets. Those are listed in [TO_BUILD.md](TO_BUILD.md),
+to build per machine as needed.
 
-3. **Fill in your values** in `config.yaml` -- Slack IDs, Jira IDs, vault path, etc.
+## Developing
 
-4. **Initialize your vault** from the template:
-   ```bash
-   ./scripts/setup.sh
-   ```
+```bash
+claude --plugin-dir plugins/second-brain --plugin-dir plugins/work-kit
+```
 
-5. **Create scheduled tasks** for each automation:
-   ```bash
-   claude schedule create --from scheduled-tasks/nightly-journal.yaml
-   claude schedule create --from scheduled-tasks/meeting-debriefs.yaml
-   claude schedule create --from scheduled-tasks/weekly-rollup.yaml
-   claude schedule create --from scheduled-tasks/daily-kickoff.yaml
-   ```
+loads the plugins straight from the working tree (`/reload-plugins` picks up
+edits). Point `SECOND_BRAIN_CONFIG` at a throwaway config to test against a
+scratch vault. Bump `version` in the plugin's `.claude-plugin/plugin.json`
+when you ship a change.
 
-6. Verify tasks are running with `claude schedule list`.
+## Rest of the repo
 
-## Rebuilding on a new machine
-
-See [REBUILD.md](REBUILD.md).
-
-## Documentation
-
-See the `docs/` directory for detailed guides on each task, vault structure conventions, and how to add custom skills or overrides.
+- `scheduled-tasks/`, `config.example.yaml`, `SETUP.md` — the scheduled
+  journal / rollup / kickoff / meeting-debrief pipeline. Not part of the
+  plugins yet; see [TO_BUILD.md](TO_BUILD.md).
+- `harness/` — templated reference copies of user settings, the statusline,
+  and launchd plists. Generated by `scripts/sanitize-harness.py`, filled by
+  `scripts/fill-harness.py`.
+- `sharing/` — a stripped-down copy for sharing the framework with others.
+- [REBUILD.md](REBUILD.md) — standing everything back up on a fresh machine.

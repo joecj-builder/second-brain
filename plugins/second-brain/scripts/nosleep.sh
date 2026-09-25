@@ -10,10 +10,18 @@
 # Mechanism: only `pmset disablesleep 1` defeats lid-close sleep (caffeinate can't).
 # Reference-counted via one lock file per session_id so concurrent sessions don't
 # prematurely re-enable sleep. Requires a narrowly-scoped passwordless sudoers rule:
-#   {{unix_user}} ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep *
+#   <your-username> ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep *
 # If that rule is missing, this degrades gracefully (logs a failure, never prompts).
+#
+# Off unless SECOND_BRAIN_KEEP_AWAKE=true in the second-brain config.
 
 set -u
+
+. "$(dirname "$0")/config.sh"
+if [ "${SECOND_BRAIN_KEEP_AWAKE:-false}" != true ] || [ "$(uname)" != Darwin ]; then
+  cat >/dev/null 2>&1
+  exit 0
+fi
 
 ACTION="${1:-}"
 LOCK_DIR="$HOME/.claude/nosleep-locks"

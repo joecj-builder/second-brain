@@ -1,0 +1,22 @@
+{
+  "name": "second-brain",
+  "owner": {
+    "name": "josephcoz",
+    "url": "https://github.com/josephcoz"
+  },
+  "metadata": {
+    "description": "An Obsidian vault as Claude Code's persistent memory store, plus an optional kit for work machines."
+  },
+  "plugins": [
+    {
+      "name": "second-brain",
+      "source": "./plugins/second-brain",
+      "description": "Vault-as-memory protocol, /document, /dream, session-start vault context, and auto-document on session end."
+    },
+    {
+      "name": "work-kit",
+      "source": "./plugins/work-kit",
+      "description": "Work-machine extras: markdown to Google Doc, Hex, and publishing a scrubbed copy of the vault."
+    }
+  ]
+}

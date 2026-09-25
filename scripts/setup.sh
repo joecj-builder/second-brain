@@ -23,7 +23,7 @@ echo "Vault path: $VAULT_PATH"
 # Create vault structure if it doesn't exist
 if [ ! -d "$VAULT_PATH" ]; then
     echo "Creating vault at $VAULT_PATH..."
-    cp -r "$REPO_DIR/vault-template/" "$VAULT_PATH"
+    cp -r "$REPO_DIR/plugins/second-brain/vault-template/" "$VAULT_PATH"
     echo "Vault created. Fill in Onboarding.md with your details."
 else
     echo "Vault already exists at $VAULT_PATH — skipping."

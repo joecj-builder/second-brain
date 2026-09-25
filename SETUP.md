@@ -23,7 +23,7 @@ Two repos plus a vault:
 
 ```
 second-brain/              # Shared framework (this repo) — clone-and-use
-  vault-template/          # Starter vault folder structure
+  plugins/                 # Claude Code plugins: protocol, /document, /dream, vault template
   scheduled-tasks/         # Generic prompts for each nightly/weekly agent
   scripts/                 # Setup helpers
   docs/                    # Deeper guides
@@ -122,7 +122,7 @@ cd ~/github-projects/second-brain
 ./scripts/setup.sh ~/github-projects/<your-automation-repo>/config.yaml
 ```
 
-This copies `vault-template/` to the `vault.path` you configured. Open the vault in Obsidian and fill in `Onboarding.md` — that file is the cold-start document every future Claude session reads first.
+This copies `plugins/second-brain/vault-template/` to the `vault.path` you configured. (Installing the `second-brain` plugin and running `/second-brain:setup` does the same, and more — see README.) Open the vault in Obsidian and fill in `Onboarding.md` — that file is the cold-start document every future Claude session reads first.
 
 Fill in these placeholders specifically:
 
@@ -206,8 +206,8 @@ See also:
 | Nightly journal never fires | Scheduled task not registered, or Claude Code auth expired | `claude schedule list`; re-auth with `claude login` |
 | Journal is empty | MCP connector returning no data | Test each MCP source in an interactive Claude Code session |
 | Meetings missing from journal | Granola / Drive transcript not yet available at run time | Push the schedule 30+ minutes later, or wait for Drive to finish processing |
-| Claude ignores vault conventions | `CLAUDE.md` not loaded | Make sure you launched Claude from a directory that includes the framework (`--add-dir ~/github-projects/second-brain`) |
-| Files landing in wrong vault | Working in the wrong context | Check `CLAUDE_CONTEXT` env var and `config.yaml` `vault.path` |
+| Claude ignores vault conventions | `second-brain` plugin not installed or not set up | `/plugin install second-brain@second-brain`, then `/second-brain:setup` |
+| Files landing in wrong vault | Config points at a different vault | Check `SECOND_BRAIN_VAULT` in `~/.claude/second-brain/config.env` and `config.yaml` `vault.path` |
 
 ---
 

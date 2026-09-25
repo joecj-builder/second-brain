@@ -12,15 +12,8 @@
 
 # --- identity -------------------------------------------------------------
 
-# Display name, as it should read in prose: "{{user}}'s preferred format..."
-user = "Jane"
-
 # Lowercase token for launchd labels: com.<user_slug>.second-brain.nightly-journal
 user_slug = "jane"
-
-# macOS account name — `whoami`. Used in the sudoers rule documented in
-# hooks/nosleep.sh.
-unix_user = "jane.doe"
 
 # The same account name with dots and slashes replaced by dashes. Claude Code
 # mangles a project's absolute path into a flat directory name this way, so
@@ -32,25 +25,13 @@ unix_user_dashed = "jane-doe"
 # expand "~", so the plists need the real path.
 home = "/Users/jane.doe"
 
-# --- employer -------------------------------------------------------------
+# --- vault ----------------------------------------------------------------
+# Absolute path to the vault the scheduled jobs write to.
 
-company = "Acme"
-team    = "RevOps"
-
-# --- github ---------------------------------------------------------------
-
-gh_work_account     = "jane-at-acme"
-gh_personal_account = "janedoe"
-
-# --- vaults ---------------------------------------------------------------
-# Absolute paths. These are the two Obsidian vaults; content never crosses
-# between them.
-
-work_vault     = "/Users/jane.doe/obsidian-vaults/Work"
-personal_vault = "/Users/jane.doe/obsidian-vaults/Personal"
+work_vault = "/Users/jane.doe/obsidian-vaults/Work"
 
 # --- repos ----------------------------------------------------------------
-# Absolute paths to the repos the claude() shell function passes via --add-dir.
+# Absolute paths to the repos the launchd jobs run in.
 
 # Host repo for work scheduled tasks, scripts, and config.yaml. Create it at a
 # new employer if it does not exist yet — see SETUP.md.
@@ -65,7 +46,3 @@ second_brain_repo = "/Users/jane.doe/github-projects/second-brain"
 
 # Personal counterpart to work_automation_repo.
 personal_automation_repo = "/Users/jane.doe/personal-projects/life-automations"
-
-# Meeting transcription tool. If you do not use it, drop the matching
-# --add-dir line from zshrc-claude-function.sh after filling.
-meetingscribe_repo = "/Users/jane.doe/personal-projects/meetingscribe"

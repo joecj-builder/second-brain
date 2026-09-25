@@ -1,0 +1,108 @@
+# scrub-config.example.toml — sensitivity ruleset for /work-kit:share-scrubbed-brain
+# ===================================================================================
+# Copy to ~/.claude/second-brain/scrub-config.toml and edit. The real file names
+# people and internal paths, so it stays out of this repo.
+#
+# Single source of truth for what gets SHARED and what gets SCRUBBED when
+# publishing a redacted copy of the vault to colleagues.
+#
+# Audience: INTERNAL colleagues. Real names, customer names, and pricing STAY.
+# We scrub: opinions-on-people, compensation, and personal/legal items.
+#
+# Patterns are Python `re` (matched case-insensitively). TOML literal strings
+# (single quotes) preserve backslashes, so write regex directly — no escaping.
+# The regex pass is RECALL-oriented: false positives are expected and fine;
+# the review + LLM judgment pass adjudicates each hit. Edit this file to tune.
+
+[vault]
+path    = "~/obsidian-vaults/Work"
+staging = "~/obsidian-vaults/Work-scrubbed"
+
+[drive]
+folder_name = "Second Brain (Scrubbed)"
+share_with  = []          # e.g. ["team@example.com"] — set before first sync
+share_role  = "reader"    # reader | commenter
+
+# --- SCOPE (default-deny) -------------------------------------------------
+# Only files under include_dirs (plus any include_files) are EVER considered.
+# Everything else in the vault is excluded by default.
+[scope]
+include_dirs  = ["Topics", "DataContext", "Analysis", "Projects", "People"]
+include_files = []                       # specific root-level .md files, if any
+# Paths (relative to vault root) excluded even when under an included dir:
+exclude_paths = [
+  "DataContext/working-with-user",       # private working preferences
+]
+exclude_globs = ["*.pdf"]                # non-markdown; handle separately if ever needed
+
+# --- SENSITIVITY TIERS ----------------------------------------------------
+# Each tier has `strong` (high-confidence) and `weak` (needs-context) patterns.
+# Report heat score = 3*strong_hits + 1*weak_hits. `action` is the default
+# disposition for a hit, adjudicated during review (redact span | exclude file).
+
+[[tier]]
+id     = "comp"
+label  = "Compensation / OTE"
+action = "redact"
+strong = [
+  # Strong = the actual per-rep comp FIELDS — these reliably mark a file that
+  # states someone's pay (quota-master audits, comp-history references).
+  '\bOTE\b',
+  '\bOTC\b',
+  '\bon-target\s+(earnings|commission|comp)',
+  '\bsalar(y|ies)\b',
+  '\bannual\s+salary\b',
+  '\bpay\s?mix\b',
+  '\bbase\s*/\s*variable\b',
+  '\bbase\s*\+\s*commission\b',
+  '\bseverance\b',
+  '\bequity\s+(grant|package|refresh|award)\b',
+]
+# Weak = comp workflow vocab (a file can discuss the comp-letter process without
+# exposing a number). Removed bare `$` — pricing figures are fine for internal.
+weak = [
+  '\bcomp(ensation)?\s+(letter|plan|history|model)s?\b',
+  '\bbonus(es)?\b',
+  '\bvariable\s+pay\b',
+]
+
+[[tier]]
+id     = "opinions"
+label  = "Opinions on people"
+action = "redact"
+strong = [
+  # Removed bare `fire` ("DM did not fire"), `PIP` ("pip install"), `terminat*`
+  # (contract/subscription termination), `go/no-go` (project gates) — all noise.
+  '\bnot\s+competent\b',
+  '\bincompeten',
+  '\bunder[-\s]?perform',
+  '\bperformance\s+(plan|issue|concern|problem|review)',
+  '\blet\s+(them|him|her)\s+go\b',
+  '\bmanag(e|ing)\s+(out|him|her|them)\b',
+  '\bnot\s+a\s+(good\s+)?fit\b',
+  '\bpass(ed|ing)?\s+on\s+(him|her|them|the\s+candidate)\b',
+]
+weak = [
+  '\bconcerns?\s+about\s+(him|her|them)\b',
+  '\bstruggl(e|es|ing|ed)\b',
+  '\bnot\s+(great|strong|impressed)\b',
+]
+
+[[tier]]
+id     = "personal"
+label  = "Personal / legal / confidential"
+action = "redact"
+strong = [
+  # Removed `acquisi*` ("customer acquisition") — kept layoff/reorg/leave terms.
+  '\bpatern(al|ity)\b',
+  '\bparental\s+leave\b',
+  '\bmaternity\b',
+  '\bpregnan',
+  '\blayoff',
+  '\bre-?org\b',
+]
+# Removed `health` (pipeline health), `board` (whiteboard/dashboard), `personal`.
+weak = [
+  '\bmedical\b',
+  '\bconfidential\b',
+]
