@@ -64,7 +64,13 @@ Lessons baked in (from the first hand-built setup):
   journal may edit only the vault and run only the plugin's read-only
   `journal-helper.py` (sessions, file changes, GitHub) and `date`; the dream
   may edit only `SECOND_BRAIN_DREAM_DIR` and run a fixed list of git
-  subcommands. Both deny `git push`, `rm`, `curl` and `python3 -c`. Extra
+  subcommands. Both deny `git push`, `rm`, `curl` and `python3 -c`, plus two
+  ways around the folder limits that real probes found: git's
+  `--output=<file>` option (`git log --output=` wrote a file outside the
+  allowed folder until `Bash(git *--output*)` was denied) and edits to
+  `.obsidian/` (Obsidian loads plugin code from it). `run-dream.sh` creates
+  the week's branch and worktree itself, because `git worktree add` accepts
+  any path; the run may edit only that one worktree. Extra
   rules go in `SECOND_BRAIN_JOB_EXTRA_ALLOW` (`install-scheduled-jobs.sh
   --allow`). An allow list that includes `python3:*` or `find:*` isn't a
   boundary: a run denied the Write tool once wrote outside the vault with

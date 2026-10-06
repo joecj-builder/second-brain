@@ -10,8 +10,8 @@ description: >
   "consolidate memory", "clean up the second brain", or on the weekly
   schedule. Modes: default (full weekly consolidation), --quick (fast
   MEMORY.md trim + obvious merges), --notify (Slack DM the report; the
-  weekly scheduled run only), --dream-dir (where worktrees go; the
-  scheduled run passes it).
+  weekly scheduled run only), --worktree (the worktree the scheduled
+  runner already created).
 allowed-tools: Bash, Read, Edit, Write
 ---
 
@@ -36,20 +36,22 @@ store stays fast for Claude to consume.
    vault: …"). Call it `<vault>`. The scheduled run starts *in* the vault.
 2. **Parse args:** `--quick` (fast mode), `--notify` (send Slack DM — the weekly
    scheduled run passes this; on-demand `/dream` must NOT), `--slack-dm <ID>`
-   (where to send it), `--dream-dir "<path>"` (where dream worktrees go),
+   (where to send it), `--worktree "<path>"` and `--week <YYYY-Wxx>` (the
+   scheduled run's ready-made worktree and its period label),
    `--since YYYY-MM-DD` (override the window).
-   - **Scheduled run** (`--dream-dir` given): everything you need is in the
-     args. Don't read `~/.claude/second-brain/config.env`; it is outside the
-     folders this run may read. It runs unattended, so never stop to ask.
+   - **Scheduled run** (`--worktree` given): the runner has already committed
+     the vault's pending changes and created the branch `dream/<week>` in a
+     new worktree at that path. Everything you need is in the args. Don't
+     read `~/.claude/second-brain/config.env`; it is outside the folders this
+     run may read. It runs unattended, so never stop to ask.
    - **On-demand run:** read `~/.claude/second-brain/config.env` for
      `SECOND_BRAIN_DREAM_DIR` (default `~/.claude/second-brain/dream-worktrees`)
-     and `SECOND_BRAIN_TIMEZONE`.
-   Call the worktree folder `<dream-dir>`.
+     and `SECOND_BRAIN_TIMEZONE`. Call the worktree folder `<dream-dir>`.
 3. **Work from inside the vault**, then from inside the worktree. Run plain
    `git <subcommand>` from the right folder: no `git -C`, no compound
    `&&` chains. The scheduled run only allows these git subcommands:
    `rev-parse`, `status`, `for-each-ref`, `log`, `diff`, `show`,
-   `worktree add`, `worktree list`, `add`, `commit`, `rm`. Use the Read,
+   `worktree list`, `add`, `commit`, `rm` (never with `--output`). Use the Read,
    Write and Edit tools for files, `date` for dates, and the read-only
    helper `python3 -I ${CLAUDE_PLUGIN_ROOT}/scripts/journal-helper.py` for
    everything else: `list --glob "<pattern>"` to list files, `search --root
@@ -57,7 +59,9 @@ store stays fast for Claude to consume.
    the helper even if Glob or Grep tools exist, so runs behave the same on
    every Claude Code version. Nothing else (no `mv`, `rm`, `mkdir`, `find`,
    `python3 -c`).
-4. **Guards — bail with a clear message if any fail** (from inside `<vault>`):
+4. **Guards (on-demand runs only** — the scheduled runner has already done
+   all three, so go straight to Step 1). Bail with a clear message if any
+   fail (from inside `<vault>`):
    - Vault must be a git repo: `git rev-parse --git-dir` succeeds. If not:
      *"Vault isn't git-backed yet — run `git init` in `<vault>` first. Dreams need git for the non-destructive review branch."* Stop.
    - Working tree should be clean-ish on `main`: `git status --porcelain`.
@@ -65,23 +69,28 @@ store stays fast for Claude to consume.
      diffs cleanly: `git add -A`, then `git commit -m "pre-dream snapshot"`.
      Tell the user you did this.
    - No existing dream branch for this period: `git for-each-ref refs/heads/dream/`
-     (see Step 1 for the label). If one exists: on demand, ask whether to
-     resume it or start fresh; in a scheduled run, stop and say it's waiting
-     for review.
+     (see Step 1 for the label). If one exists, ask whether to resume it or
+     start fresh.
 
 ## Step 1 — Set up the dream worktree (non-destructive)
 
-Compute the period label from the window end date: ISO week `YYYY-Wxx`
-(`date +%G-W%V`). Then create an **isolated git worktree** inside
-`<dream-dir>` so Obsidian (which follows the live vault on `main`) is never
-disturbed while the dream runs. From inside `<vault>`, with absolute paths:
+The dream works in an **isolated git worktree** so Obsidian (which follows
+the live vault on `main`) is never disturbed while it runs.
+
+**Scheduled run:** the worktree already exists. `$DREAM` is the `--worktree`
+path, the period label is `--week`, and the branch `dream/<week>` is checked
+out there. Don't run `git worktree add`; the run doesn't allow it.
+
+**On-demand run:** compute the period label from the window end date: ISO
+week `YYYY-Wxx` (`date +%G-W%V`). Then create the worktree inside
+`<dream-dir>`. From inside `<vault>`, with absolute paths:
 
 ```bash
 git worktree add "<dream-dir>/<vault-folder-name>-<YYYY-Wxx>" -b dream/<YYYY-Wxx>
 ```
 
-(`<vault-folder-name>` is the last part of the vault path. The scheduled
-runner creates `<dream-dir>`; on demand, it is created by `git worktree add`.)
+(`<vault-folder-name>` is the last part of the vault path. `git worktree add`
+creates `<dream-dir>` if it's missing.)
 
 All reads-of-the-store for *editing* and **all writes** happen inside that
 worktree (call it `$DREAM`, an absolute path). `cd "$DREAM"` once, and run

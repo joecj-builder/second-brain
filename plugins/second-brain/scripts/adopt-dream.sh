@@ -20,10 +20,6 @@ VAULT="${SECOND_BRAIN_VAULT:?no vault configured; run /second-brain:setup}"
 BRANCH="dream/${WEEK}"
 VAULT="${VAULT%/}"
 DREAM_DIR="${SECOND_BRAIN_DREAM_DIR:-$HOME/.claude/second-brain/dream-worktrees}"
-# Current location first; dreams from plugin 0.2.0 and earlier used a sibling
-# of the vault.
-WORKTREE="${DREAM_DIR%/}/$(basename "$VAULT")-${WEEK}"
-[ -d "$WORKTREE" ] || WORKTREE="$(dirname "$VAULT")/$(basename "$VAULT")-dream-${WEEK}"
 
 cd "$VAULT"
 
@@ -31,6 +27,14 @@ if ! git rev-parse --verify "$BRANCH" >/dev/null 2>&1; then
   echo "No branch '$BRANCH' in $VAULT — nothing to do." >&2
   exit 1
 fi
+
+# Ask git where the branch is checked out, whatever the folder was named.
+# Fall back to the usual locations: the dream folder, then (plugin 0.2.0 and
+# earlier) a sibling of the vault.
+WORKTREE="$(git worktree list --porcelain | awk -v b="branch refs/heads/$BRANCH" '
+  /^worktree /{w=substr($0, 10)} $0==b && !found {print w; found=1}')"
+[ -n "$WORKTREE" ] || WORKTREE="${DREAM_DIR%/}/$(basename "$VAULT")-${WEEK}"
+[ -d "$WORKTREE" ] || WORKTREE="$(dirname "$VAULT")/$(basename "$VAULT")-dream-${WEEK}"
 
 # Remove the worktree first (a branch checked out in a worktree can't be merged/deleted cleanly).
 git worktree remove --force "$WORKTREE" 2>/dev/null || true

@@ -79,7 +79,9 @@ SB_AUTH_HINT="Claude's sign-in expired, so the scheduled run couldn't start. Ope
 #   - Edit(...) covers every file-writing tool (Write rules aren't consulted
 #     for file edits). "//" starts an absolute path in a rule.
 #   - The deny list is a backstop; deny beats allow, including rules in the
-#     user's own settings.
+#     user's own settings. It also closes two ways around the folder limits:
+#     git's --output=<file> option (log, diff and show would write a file
+#     anywhere) and edits to .obsidian/ (Obsidian loads plugin code from it).
 #   - No --permission-mode anywhere: the allow list is the whole grant.
 
 # sb_json_str <string> — print it as a JSON string literal.
@@ -143,23 +145,25 @@ mcp__claude_ai_Google_Calendar__list_events
 mcp__claude_ai_Google_Calendar__get_event"
 
 # The git subcommands skills/dream/SKILL.md runs, and nothing else (no push,
-# no merge, no branch deletion, no -C). Keep in sync with the skill.
+# no merge, no branch deletion, no -C). No `worktree add` either: it takes
+# any path, so run-dream.sh creates the worktree itself before the run. Keep
+# in sync with the skill.
 SB_DREAM_GIT="rev-parse
 status
 for-each-ref
 log
 diff
 show
-worktree add
 worktree list
 add
 commit
 rm"
 
-# sb_write_job_settings <nightly-journal|dream> — write this run's settings
-# file and print its path. Needs SECOND_BRAIN_VAULT.
+# sb_write_job_settings nightly-journal | dream <worktree> — write this run's
+# settings file and print its path. Needs SECOND_BRAIN_VAULT. The dream may
+# edit only <worktree>, the folder run-dream.sh created for this week.
 sb_write_job_settings() {
-  local job="$1" vault="${SECOND_BRAIN_VAULT%/}" file line
+  local job="$1" worktree="${2%/}" vault="${SECOND_BRAIN_VAULT%/}" file line
   local allow=() deny=()
   case "$job" in
     nightly-journal)
@@ -168,9 +172,15 @@ sb_write_job_settings() {
       while IFS= read -r line; do allow+=("$line"); done <<EOF
 $SB_JOURNAL_READ_TOOLS
 EOF
+      deny+=("Edit(/$vault/.obsidian/**)" "Edit(/$vault/.git/**)")
       ;;
     dream)
-      allow+=("Edit(/$SB_DREAM_DIR/**)" "Bash($(sb_helper_cmd):*)" "Bash(date:*)")
+      case "$worktree" in
+        /*) ;;
+        *) echo "sb_write_job_settings: dream needs the worktree's absolute path" >&2; return 1 ;;
+      esac
+      allow+=("Edit(/$worktree/**)" "Bash($(sb_helper_cmd):*)" "Bash(date:*)")
+      deny+=("Edit(/$worktree/.obsidian/**)")
       while IFS= read -r line; do allow+=("Bash(git $line:*)"); done <<EOF
 $SB_DREAM_GIT
 EOF
@@ -182,7 +192,7 @@ EOF
 $(sb_split_rules "${SECOND_BRAIN_JOB_EXTRA_ALLOW:-}")
 EOF
 
-  deny+=("Bash(git push:*)" "Bash(rm:*)" "Bash(curl:*)" "Bash(python3 -c:*)")
+  deny+=("Bash(git push:*)" "Bash(git *--output*)" "Bash(rm:*)" "Bash(curl:*)" "Bash(python3 -c:*)")
   while IFS= read -r line; do [ -n "$line" ] && deny+=("$line"); done <<EOF
 $(sb_split_rules "${SECOND_BRAIN_JOB_EXTRA_DENY:-}")
 EOF

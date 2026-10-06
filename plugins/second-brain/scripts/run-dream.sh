@@ -7,9 +7,13 @@
 # ~/.claude/second-brain/dream-worktrees) for the user to adopt or discard.
 # Passes --notify (Slack DM of the report) when SECOND_BRAIN_SLACK_DM is set.
 #
-# The run is given that folder (it holds nothing but dream worktrees) and the
-# session transcripts, and its own allow list via --settings (see
-# sb_write_job_settings in job-lib.sh). The user's settings aren't changed.
+# This script commits any pending vault changes ("pre-dream snapshot") and
+# creates the branch and worktree itself, so the run doesn't need
+# `git worktree add` (which takes any path). The run is given that one
+# worktree and the session transcripts, and its own allow list via --settings
+# (see sb_write_job_settings in job-lib.sh). The user's settings aren't
+# changed. If the run commits nothing, the empty branch and worktree are
+# removed again so the next run can retry.
 #
 # Usage:
 #   run-dream.sh             # scheduled run
@@ -29,12 +33,16 @@ case "${1:-}" in
   *) echo "Unknown argument: $1" >&2; exit 1 ;;
 esac
 
+VAULT="${VAULT%/}"
 DREAM_DIR="$SB_DREAM_DIR"
 WEEK=$(date +%G-W%V)
+BRANCH="dream/$WEEK"
+# Same name adopt-dream.sh looks for.
+WORKTREE="$DREAM_DIR/$(basename "$VAULT")-$WEEK"
 
 # The skill takes everything it needs from these arguments in a scheduled
 # run, so it doesn't have to read config.env (outside the folders it's given).
-prompt="/second-brain:dream --dream-dir \"$DREAM_DIR\""
+prompt="/second-brain:dream --worktree \"$WORKTREE\" --week $WEEK"
 [ -n "${SECOND_BRAIN_SLACK_DM:-}" ] && prompt="$prompt --notify --slack-dm ${SECOND_BRAIN_SLACK_DM}"
 
 if ! git -C "$VAULT" rev-parse --git-dir >/dev/null 2>&1; then
@@ -43,16 +51,16 @@ if ! git -C "$VAULT" rev-parse --git-dir >/dev/null 2>&1; then
   exit 1
 fi
 
-if git -C "$VAULT" rev-parse --verify --quiet "refs/heads/dream/$WEEK" >/dev/null; then
-  sb_log "$LOG_FILE" "Skipped: dream/$WEEK already exists and is waiting for review (adopt or discard it with adopt-dream.sh $WEEK)."
+if git -C "$VAULT" rev-parse --verify --quiet "refs/heads/$BRANCH" >/dev/null; then
+  sb_log "$LOG_FILE" "Skipped: $BRANCH already exists and is waiting for review (adopt or discard it with adopt-dream.sh $WEEK)."
   sb_notify "Second brain" "This week's memory review is already waiting for you. Ask Claude to show you the dream report."
   exit 0
 fi
 
-# Only the dream folder (worktrees only, never the vault's parent) and the
-# session transcripts. The vault itself is the working directory.
-add_dirs=(--add-dir "$DREAM_DIR")
-helper_roots="$VAULT:$DREAM_DIR"
+# Only this week's worktree (never the vault's parent) and the session
+# transcripts. The vault itself is the working directory.
+add_dirs=(--add-dir "$WORKTREE")
+helper_roots="$VAULT:$WORKTREE"
 if [ -d "$HOME/.claude/projects" ]; then
   add_dirs+=(--add-dir "$HOME/.claude/projects")
   helper_roots="$helper_roots:$HOME/.claude/projects"
@@ -71,11 +79,11 @@ if [ "$DRY_RUN" = true ]; then
   printf ' --settings %q' "$SB_JOBS_DIR/dream-settings.json"
   printf ' %q' "${add_dirs[@]}"
   printf ' <<< %q\n' "$prompt"
+  printf 'after creating branch %s in a new worktree at %s\n' "$BRANCH" "$WORKTREE"
   exit 0
 fi
 
-mkdir -p "$DREAM_DIR"
-SETTINGS_FILE=$(sb_write_job_settings dream) || {
+SETTINGS_FILE=$(sb_write_job_settings dream "$WORKTREE") || {
   sb_log "$LOG_FILE" "ERROR: couldn't write the run's settings file in $SB_JOBS_DIR"
   sb_notify "Second brain" "Weekly review failed: couldn't prepare its permissions. Log: $LOG_FILE"
   exit 1
@@ -87,7 +95,26 @@ CLAUDE_BIN=$(sb_claude_bin) || {
   exit 1
 }
 
-branches_before=$(git -C "$VAULT" for-each-ref --format='%(refname:short) %(objectname)' refs/heads/dream/)
+# Commit pending changes first, so the dream branch starts from everything in
+# the vault and its diff shows only what the dream did.
+if [ -n "$(git -C "$VAULT" status --porcelain 2>/dev/null)" ]; then
+  if snap_err=$(git -C "$VAULT" add -A 2>&1 && git -C "$VAULT" commit -q -m "pre-dream snapshot" 2>&1); then
+    sb_log "$LOG_FILE" "Committed the vault's pending changes (pre-dream snapshot)."
+  else
+    sb_log "$LOG_FILE" "ERROR: couldn't commit the vault's pending changes before the dream: $snap_err"
+    sb_notify "Second brain" "Weekly review failed: couldn't save the vault's pending changes first. Log: $LOG_FILE"
+    exit 1
+  fi
+fi
+
+mkdir -p "$DREAM_DIR"
+git -C "$VAULT" worktree prune >/dev/null 2>&1
+if ! wt_err=$(git -C "$VAULT" worktree add "$WORKTREE" -b "$BRANCH" 2>&1); then
+  sb_log "$LOG_FILE" "ERROR: couldn't create the dream worktree at $WORKTREE: $wt_err"
+  sb_notify "Second brain" "Weekly review failed: couldn't set up its review folder. Log: $LOG_FILE"
+  exit 1
+fi
+base_commit=$(git -C "$VAULT" rev-parse "refs/heads/$BRANCH")
 run_out=$(mktemp "${TMPDIR:-/tmp}/dream-out.XXXXXX")
 
 sb_log "$LOG_FILE" "Running $prompt..."
@@ -102,22 +129,32 @@ sb_log "$LOG_FILE" "Running $prompt..."
 claude_exit=$?
 cat "$run_out" >> "$LOG_FILE"
 
-branches_after=$(git -C "$VAULT" for-each-ref --format='%(refname:short) %(objectname)' refs/heads/dream/)
+tip_commit=$(git -C "$VAULT" rev-parse --verify --quiet "refs/heads/$BRANCH")
 
-# As with the journal, exit 0 doesn't prove the dream ran. A new or updated
-# dream/* branch does.
-if [ "$claude_exit" -eq 0 ] && [ "$branches_after" != "$branches_before" ]; then
-  sb_log "$LOG_FILE" "OK: dream branch ready for review ($(git -C "$VAULT" for-each-ref --sort=-committerdate --count=1 --format='%(refname:short)' refs/heads/dream/))"
+# As with the journal, exit 0 doesn't prove the dream ran. Commits on the
+# dream branch do.
+if [ "$claude_exit" -eq 0 ] && [ -n "$tip_commit" ] && [ "$tip_commit" != "$base_commit" ]; then
+  sb_log "$LOG_FILE" "OK: dream branch ready for review ($BRANCH)"
   sb_notify "Second brain" "Your weekly memory review is ready. Ask Claude to show you the dream report."
   rm -f "$run_out"
   exit 0
 fi
 
+# Nothing was committed: remove the empty branch and worktree, or the next
+# run this week would hit the guard above and report a review that isn't there.
+if [ "$tip_commit" = "$base_commit" ]; then
+  git -C "$VAULT" worktree remove --force "$WORKTREE" >/dev/null 2>&1
+  git -C "$VAULT" branch -D "$BRANCH" >/dev/null 2>&1
+  left="the empty $BRANCH branch and its worktree were removed, so the next run starts fresh"
+else
+  left="$BRANCH has partial work; review or discard it with adopt-dream.sh $WEEK"
+fi
+
 if sb_auth_failed "$run_out"; then
-  sb_log "$LOG_FILE" "FAILED — $SB_AUTH_HINT"
+  sb_log "$LOG_FILE" "FAILED — $SB_AUTH_HINT ($left)"
   sb_notify "Second brain" "Weekly review didn't run: open Terminal, run claude, and sign in again."
 else
-  sb_log "$LOG_FILE" "FAILED (exit=$claude_exit, no dream branch created or updated — see the output above)"
+  sb_log "$LOG_FILE" "FAILED (exit=$claude_exit; $left — see the output above)"
   sb_notify "Second brain" "Weekly review failed. Log: $LOG_FILE"
 fi
 rm -f "$run_out"
