@@ -263,8 +263,12 @@ CLAUDE_BIN=$(sb_claude_bin) || {
 # summarizes sessions itself; the transcripts folder is there so the run can
 # open one when a summary is too thin. Plus the user's optional daily notes.
 add_dirs=()
+helper_roots="$VAULT"
 for dir in "$HOME/.claude/projects" "$DAILY_NOTES_DIR"; do
-  [ -d "$dir" ] && add_dirs+=(--add-dir "$dir")
+  if [ -d "$dir" ]; then
+    add_dirs+=(--add-dir "$dir")
+    helper_roots="$helper_roots:$dir"
+  fi
 done
 
 plugin_args=()
@@ -310,6 +314,8 @@ for target_date in "${dates[@]}"; do
   # No --permission-mode flags: the --settings allow list is the whole grant.
   (
     cd "$VAULT" || exit 1
+    # The helper's list/search/modified read only inside these folders.
+    export SB_HELPER_ROOTS="$helper_roots"
     "$CLAUDE_BIN" -p "${plugin_args[@]}" --settings "$SETTINGS_FILE" "${add_dirs[@]}" < "$rendered"
   ) > "$run_out" 2>&1
   claude_exit=$?

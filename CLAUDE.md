@@ -46,7 +46,11 @@ lookup, writing rules, Learning Loop) lives in
   come from `sb_write_job_settings` in `scripts/job-lib.sh`, passed per run
   with `--settings`. If a prompt or skill the jobs run starts using a new
   tool or command, add the narrowest matching rule there (and keep
-  `skills/dream/SKILL.md`'s git list in sync with `SB_DREAM_GIT`).
+  `skills/dream/SKILL.md`'s git list in sync with `SB_DREAM_GIT`). The
+  runs list and search files through `scripts/journal-helper.py` (some
+  Claude Code versions have no Glob or Grep tools), and the runners set
+  `SB_HELPER_ROOTS` so the helper only reads the run's own folders. If you
+  add an `--add-dir`, add it to `helper_roots` too.
 - **Test scheduled-job changes with real runs, not just a fake `claude`.** A
   fake can't catch CLI argument or permission problems. Use a test config
   that sets `SECOND_BRAIN_VAULT` (a throwaway vault, or a `git clone` of a

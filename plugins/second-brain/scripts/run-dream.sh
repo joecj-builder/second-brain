@@ -52,7 +52,11 @@ fi
 # Only the dream folder (worktrees only, never the vault's parent) and the
 # session transcripts. The vault itself is the working directory.
 add_dirs=(--add-dir "$DREAM_DIR")
-[ -d "$HOME/.claude/projects" ] && add_dirs+=(--add-dir "$HOME/.claude/projects")
+helper_roots="$VAULT:$DREAM_DIR"
+if [ -d "$HOME/.claude/projects" ]; then
+  add_dirs+=(--add-dir "$HOME/.claude/projects")
+  helper_roots="$helper_roots:$HOME/.claude/projects"
+fi
 
 plugin_args=()
 while IFS= read -r a; do
@@ -89,6 +93,8 @@ run_out=$(mktemp "${TMPDIR:-/tmp}/dream-out.XXXXXX")
 sb_log "$LOG_FILE" "Running $prompt..."
 (
   cd "$VAULT" || exit 1
+  # The helper's list/search/modified read only inside these folders.
+  export SB_HELPER_ROOTS="$helper_roots"
   # Prompt on stdin: --add-dir takes several values, so a prompt argument
   # after it would be read as one more directory.
   "$CLAUDE_BIN" -p "${plugin_args[@]}" --settings "$SETTINGS_FILE" "${add_dirs[@]}" <<< "$prompt"

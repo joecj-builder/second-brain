@@ -12,7 +12,7 @@ description: >
   MEMORY.md trim + obvious merges), --notify (Slack DM the report; the
   weekly scheduled run only), --dream-dir (where worktrees go; the
   scheduled run passes it).
-allowed-tools: Bash, Read, Edit, Write, Glob, Grep
+allowed-tools: Bash, Read, Edit, Write
 ---
 
 # dream — Agent Skill
@@ -50,8 +50,12 @@ store stays fast for Claude to consume.
    `&&` chains. The scheduled run only allows these git subcommands:
    `rev-parse`, `status`, `for-each-ref`, `log`, `diff`, `show`,
    `worktree add`, `worktree list`, `add`, `commit`, `rm`. Use the Read,
-   Glob, Grep, Write and Edit tools for files, `date` for dates, and the
-   session helper in Step 2. Nothing else (no `mv`, `rm`, `mkdir`, `find`,
+   Write and Edit tools for files, `date` for dates, and the read-only
+   helper `python3 -I ${CLAUDE_PLUGIN_ROOT}/scripts/journal-helper.py` for
+   everything else: `list --glob "<pattern>"` to list files, `search --root
+   <dir> --pattern <regex>` to search contents, and `sessions` (Step 2). Use
+   the helper even if Glob or Grep tools exist, so runs behave the same on
+   every Claude Code version. Nothing else (no `mv`, `rm`, `mkdir`, `find`,
    `python3 -c`).
 4. **Guards — bail with a clear message if any fail** (from inside `<vault>`):
    - Vault must be a git repo: `git rev-parse --git-dir` succeeds. If not:

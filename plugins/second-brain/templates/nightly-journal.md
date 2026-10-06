@@ -20,8 +20,8 @@ This is an automated task running without user interaction. Execute autonomously
 
 ## Tools you may use (the run allows nothing else)
 
-- **Read, Glob, Grep** to look at files. **Write and Edit** to create and change files, only inside `{{vault_path}}`. Write creates any missing folders itself.
-- The read-only helper, typed exactly as shown with only the arguments changed: `{{journal_helper}} sessions …`, `{{journal_helper}} modified …`, `{{journal_helper}} github …`, `{{journal_helper}} github-pr …`.
+- **Read** to look at files. **Write and Edit** to create and change files, only inside `{{vault_path}}`. Write creates any missing folders itself.
+- The read-only helper, typed exactly as shown with only the arguments changed: `{{journal_helper}} sessions …`, `{{journal_helper}} modified …`, `{{journal_helper}} list --glob "<pattern>"` (to list files), `{{journal_helper}} search --root <dir> --pattern <regex>` (to search file contents), `{{journal_helper}} github …`, `{{journal_helper}} github-pr …`. Use `list` and `search` even if Glob or Grep tools exist, so the run behaves the same on every Claude Code version.
 - `date`, and the connector tools named below.
 
 Don't run any other shell command: no `ls`, `find`, `cat`, `head`, `tail`, `grep`, `mkdir`, `python3`, `gh` or `&&` chains. They will be denied, and a denied step wastes the run. Never write outside `{{vault_path}}`.
@@ -55,7 +55,7 @@ Before gathering journal data, export the day's meetings into the vault using th
 
 ### 0b. Check what already exists in Obsidian
 
-Glob `{{vault_path}}/Meetings/{{target_date}}*.md` to list the meeting files already written for {{target_date}}.
+Run `{{journal_helper}} list --glob "{{vault_path}}/Meetings/{{target_date}}*.md"` to list the meeting files already written for {{target_date}}.
 
 For each Granola meeting, build the expected filename as `{date} {sanitized title}.md`, where the sanitized title is the meeting title with the characters `<>:"/\|?*` removed, runs of whitespace collapsed to one space, and cut at a word boundary to at most 120 characters. If the file already exists AND has real content (not the placeholder `*AI summary not yet available*`), skip it. If it exists but only has the placeholder, update it with the Granola summary.
 
@@ -136,7 +136,7 @@ Run:
 It prints a compact summary of every Claude Code and Claude desktop (Cowork) session with activity on {{target_date}}: title, folder, git branch, linked PRs, the user's prompts and short notes from Claude's replies. It already skips scheduled runs like this one. Use it to extract the key topics, decisions, and work done. Filter out personal topics. If a summary is too thin to understand the work, Read the transcript path it lists (only the part from {{target_date}}).
 
 ### 3. Meetings (exported in Step 0)
-Step 0 already exported meetings from Granola or the calendar. Glob `{{vault_path}}/Meetings/{{target_date}}*.md` for the meetings from {{target_date}}. For each one, Read it and include a summary in the journal entry under a "## Meetings" section. Include the meeting title, attendees, and key topics discussed. If the file has a `## Transcript` section, summarize the key discussion points from it. If it only has Granola notes or is still empty, note that.
+Step 0 already exported meetings from Granola or the calendar. Run `{{journal_helper}} list --glob "{{vault_path}}/Meetings/{{target_date}}*.md"` for the meetings from {{target_date}}. For each one, Read it and include a summary in the journal entry under a "## Meetings" section. Include the meeting title, attendees, and key topics discussed. If the file has a `## Transcript` section, summarize the key discussion points from it. If it only has Granola notes or is still empty, note that.
 
 Also Read the end of `{{vault_path}}/Meetings/_granola-export-log.md` (if it exists) for any export errors.
 
@@ -209,7 +209,7 @@ For each PR, write a bullet under `## GitHub`:
 - Title linked to `url`, and the repo.
 - What happened that day (opened, merged, closed, or updated), from the timestamps.
 - One or two lines on what it does, distilled from the description and that day's commits. Group commit themes; don't list every commit.
-- Link the matching `Projects/` or `Topics/` note when the PR clearly belongs to one. Glob `{{vault_path}}/Projects/*.md` and `{{vault_path}}/Topics/*.md`, and only link notes that exist.
+- Link the matching `Projects/` or `Topics/` note when the PR clearly belongs to one. List `{{vault_path}}/Projects/*.md` and `{{vault_path}}/Topics/*.md` with `{{journal_helper}} list --glob`, and only link notes that exist.
 
 If the helper reports that a search failed, add one line under the section saying GitHub activity couldn't be collected and why. Don't fail the run. If there are no PRs, omit the section.
 
@@ -225,7 +225,7 @@ Write the journal entry to: `{{vault_path}}/Journal/{{target_date}}.md` (use the
 
 The vault has topic hub nodes in `Topics/`. When writing the journal, use `[[wiki links]]` to reference **existing** topic nodes wherever a workstream is clearly relevant. This strengthens the Obsidian graph view over time.
 
-First, Glob `{{vault_path}}/Topics/*.md` to see what topic nodes exist.
+First, run `{{journal_helper}} list --glob "{{vault_path}}/Topics/*.md"` to see what topic nodes exist.
 
 Then, when writing about a workstream that matches a topic node, link to it naturally in the text. For example, write "Worked on [[Commission]] calculations" instead of just "Worked on commission calculations." Use the `[[Topic Name|display text]]` syntax when the topic name doesn't fit grammatically: `[[Pricing and Packaging|pricing]] discussions`.
 

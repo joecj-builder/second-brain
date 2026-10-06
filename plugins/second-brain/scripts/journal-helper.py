@@ -19,6 +19,15 @@ Commands:
   modified --root DIR --date D [--ext .md]
       Files under DIR modified on D (local time), relative paths, newest
       first. Skips .git, .obsidian and .trash.
+  In scheduled runs, list, search and modified only read inside the
+  folders in SB_HELPER_ROOTS (the run's vault and --add-dir folders).
+
+  list --glob PATTERN [--limit N]
+      Paths matching a glob (`**` recurses), sorted. Stands in for the Glob
+      tool, which some Claude Code versions don't have.
+  search --root DIR --pattern REGEX [--ext .md] [--limit N]
+      Lines under DIR matching a regular expression (case-insensitive), as
+      relpath:line: text. Stands in for the Grep tool.
   github --date D
       Pull requests the signed-in GitHub user authored or was involved in
       that were updated on D. Says so and exits 0 if gh is missing or
@@ -28,8 +37,10 @@ Commands:
 """
 
 import argparse
+import glob
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -260,8 +271,39 @@ def cmd_sessions(args):
         total += len(block)
 
 
+def allowed_roots():
+    """Folders a scheduled run may read, from SB_HELPER_ROOTS (set by the
+    runners to the run's cwd plus its --add-dir folders). Unset means an
+    interactive run, where the user approves each command, so no limit."""
+    raw = os.environ.get("SB_HELPER_ROOTS", "")
+    return [os.path.realpath(r) for r in raw.split(os.pathsep) if r]
+
+
+def within_roots(path, roots):
+    real = os.path.realpath(path)
+    return any(real == r or real.startswith(r + os.sep) for r in roots)
+
+
+def require_allowed(path):
+    roots = allowed_roots()
+    if roots and not within_roots(path, roots):
+        sys.exit("Not allowed: %s is outside the folders this run may read (%s)."
+                 % (path, ", ".join(roots)))
+
+
+def glob_base(pattern):
+    """The part of a glob pattern before its first wildcard."""
+    parts = []
+    for part in pattern.split(os.sep):
+        if any(c in part for c in "*?["):
+            break
+        parts.append(part)
+    return os.sep.join(parts) or os.sep
+
+
 def cmd_modified(args):
     root = os.path.abspath(os.path.expanduser(args.root))
+    require_allowed(root)
     if not os.path.isdir(root):
         sys.exit("No such folder: %s" % root)
     start, end = day_bounds(args.date, args.date)
@@ -287,6 +329,54 @@ def cmd_modified(args):
         print("%s  %s" % (datetime.fromtimestamp(m).strftime("%H:%M"), rel))
     if len(hits) > args.limit:
         print("… %d more not shown" % (len(hits) - args.limit))
+
+
+def cmd_list(args):
+    pattern = os.path.abspath(os.path.expanduser(args.glob))
+    require_allowed(glob_base(pattern))
+    roots = allowed_roots()
+    hits = sorted(glob.glob(pattern, recursive=True))
+    if roots:
+        hits = [h for h in hits if within_roots(h, roots)]
+    hits = [h for h in hits if not (set(h.split(os.sep)) & SKIP_DIRS)]
+    if not hits:
+        print("No matches for %s." % args.glob)
+        return
+    for h in hits[: args.limit]:
+        print(h)
+    if len(hits) > args.limit:
+        print("… %d more not shown" % (len(hits) - args.limit))
+
+
+def cmd_search(args):
+    root = os.path.abspath(os.path.expanduser(args.root))
+    require_allowed(root)
+    if not os.path.isdir(root):
+        sys.exit("No such folder: %s" % root)
+    try:
+        rx = re.compile(args.pattern, re.IGNORECASE)
+    except re.error as e:
+        sys.exit("Bad pattern: %s" % e)
+    shown = 0
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS)
+        for name in sorted(filenames):
+            if args.ext and not name.endswith(args.ext):
+                continue
+            path = os.path.join(dirpath, name)
+            try:
+                with open(path, encoding="utf-8", errors="replace") as f:
+                    for n, line in enumerate(f, 1):
+                        if rx.search(line):
+                            print("%s:%d: %s" % (os.path.relpath(path, root), n, clip(line.strip(), 200)))
+                            shown += 1
+                            if shown >= args.limit:
+                                print("… stopped at %d matches" % args.limit)
+                                return
+            except OSError:
+                continue
+    if not shown:
+        print("No matches for /%s/ under %s." % (args.pattern, root))
 
 
 def gh(argv):
@@ -397,6 +487,18 @@ def main():
     p.add_argument("--ext", default=".md", help="only files ending in this ('' for all)")
     p.add_argument("--limit", type=int, default=200)
     p.set_defaults(fn=cmd_modified)
+
+    p = sub.add_parser("list")
+    p.add_argument("--glob", required=True)
+    p.add_argument("--limit", type=int, default=500)
+    p.set_defaults(fn=cmd_list)
+
+    p = sub.add_parser("search")
+    p.add_argument("--root", required=True)
+    p.add_argument("--pattern", required=True)
+    p.add_argument("--ext", default=".md", help="only files ending in this ('' for all)")
+    p.add_argument("--limit", type=int, default=200)
+    p.set_defaults(fn=cmd_search)
 
     p = sub.add_parser("github")
     p.add_argument("--date", type=parse_date, required=True)
