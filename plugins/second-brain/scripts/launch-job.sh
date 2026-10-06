@@ -39,7 +39,7 @@ esac
 [ -z "$root" ] && [ -f "$fallback/scripts/run-$job.sh" ] && root="$fallback"
 
 if [ -z "$root" ]; then
-  log_dir="$HOME/Library/Logs/second-brain"
+  log_dir="${SECOND_BRAIN_LOG_DIR:-$HOME/Library/Logs/second-brain}"
   mkdir -p "$log_dir"
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: couldn't find the second-brain plugin (job $job). Reinstall it, then run /second-brain:setup." >> "$log_dir/$job.log"
   [ "${SECOND_BRAIN_JOB_NOTIFY:-true}" = true ] && osascript -e 'display notification "Scheduled job could not find the second-brain plugin. Run /second-brain:setup in Claude." with title "Second brain"' >/dev/null 2>&1

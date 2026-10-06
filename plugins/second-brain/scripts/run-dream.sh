@@ -1,10 +1,15 @@
 #!/bin/bash
 # Weekly /dream runner. Scheduled by install-scheduled-jobs.sh (launchd).
 #
-# Runs `claude -p "/second-brain:dream"` from inside the vault. The dream
-# itself is non-destructive: it writes a dream/<YYYY-Wxx> branch in a sibling
-# worktree for the user to adopt or discard. Passes --notify (Slack DM of the
-# report) when SECOND_BRAIN_SLACK_DM is set.
+# Runs /second-brain:dream with `claude -p` from inside the vault. The dream
+# itself is non-destructive: it writes a dream/<YYYY-Wxx> branch in a git
+# worktree under SECOND_BRAIN_DREAM_DIR (default
+# ~/.claude/second-brain/dream-worktrees) for the user to adopt or discard.
+# Passes --notify (Slack DM of the report) when SECOND_BRAIN_SLACK_DM is set.
+#
+# The run is given that folder (it holds nothing but dream worktrees) and the
+# session transcripts, and its own allow list via --settings (see
+# sb_write_job_settings in job-lib.sh). The user's settings aren't changed.
 #
 # Usage:
 #   run-dream.sh             # scheduled run
@@ -24,8 +29,13 @@ case "${1:-}" in
   *) echo "Unknown argument: $1" >&2; exit 1 ;;
 esac
 
-prompt="/second-brain:dream"
-[ -n "${SECOND_BRAIN_SLACK_DM:-}" ] && prompt="$prompt --notify"
+DREAM_DIR="$SB_DREAM_DIR"
+WEEK=$(date +%G-W%V)
+
+# The skill takes everything it needs from these arguments in a scheduled
+# run, so it doesn't have to read config.env (outside the folders it's given).
+prompt="/second-brain:dream --dream-dir \"$DREAM_DIR\""
+[ -n "${SECOND_BRAIN_SLACK_DM:-}" ] && prompt="$prompt --notify --slack-dm ${SECOND_BRAIN_SLACK_DM}"
 
 if ! git -C "$VAULT" rev-parse --git-dir >/dev/null 2>&1; then
   sb_log "$LOG_FILE" "ERROR: $VAULT is not a git repo; /dream needs git. Run: git -C \"$VAULT\" init -b main"
@@ -33,11 +43,15 @@ if ! git -C "$VAULT" rev-parse --git-dir >/dev/null 2>&1; then
   exit 1
 fi
 
-# The dream worktree is a sibling of the vault (../<vault>-dream-<week>), so
-# the run needs the vault's parent directory as well as the session
-# transcripts. Edits are still limited by the Edit(...) rules in
-# ~/.claude/settings.json.
-add_dirs=(--add-dir "$(dirname "$VAULT")")
+if git -C "$VAULT" rev-parse --verify --quiet "refs/heads/dream/$WEEK" >/dev/null; then
+  sb_log "$LOG_FILE" "Skipped: dream/$WEEK already exists and is waiting for review (adopt or discard it with adopt-dream.sh $WEEK)."
+  sb_notify "Second brain" "This week's memory review is already waiting for you. Ask Claude to show you the dream report."
+  exit 0
+fi
+
+# Only the dream folder (worktrees only, never the vault's parent) and the
+# session transcripts. The vault itself is the working directory.
+add_dirs=(--add-dir "$DREAM_DIR")
 [ -d "$HOME/.claude/projects" ] && add_dirs+=(--add-dir "$HOME/.claude/projects")
 
 plugin_args=()
@@ -48,9 +62,20 @@ $(sb_plugin_args)
 EOF
 
 if [ "$DRY_RUN" = true ]; then
-  echo "Would run in $VAULT: claude -p ${plugin_args[*]} ${add_dirs[*]} \"$prompt\""
+  printf 'Would run in %s:\n  claude -p' "$VAULT"
+  [ "${#plugin_args[@]}" -gt 0 ] && printf ' %q' "${plugin_args[@]}"
+  printf ' --settings %q' "$SB_JOBS_DIR/dream-settings.json"
+  printf ' %q' "${add_dirs[@]}"
+  printf ' <<< %q\n' "$prompt"
   exit 0
 fi
+
+mkdir -p "$DREAM_DIR"
+SETTINGS_FILE=$(sb_write_job_settings dream) || {
+  sb_log "$LOG_FILE" "ERROR: couldn't write the run's settings file in $SB_JOBS_DIR"
+  sb_notify "Second brain" "Weekly review failed: couldn't prepare its permissions. Log: $LOG_FILE"
+  exit 1
+}
 
 CLAUDE_BIN=$(sb_claude_bin) || {
   sb_log "$LOG_FILE" "ERROR: claude not found on PATH or at ~/.local/bin/claude"
@@ -64,7 +89,9 @@ run_out=$(mktemp "${TMPDIR:-/tmp}/dream-out.XXXXXX")
 sb_log "$LOG_FILE" "Running $prompt..."
 (
   cd "$VAULT" || exit 1
-  "$CLAUDE_BIN" -p "${plugin_args[@]}" "${add_dirs[@]}" "$prompt"
+  # Prompt on stdin: --add-dir takes several values, so a prompt argument
+  # after it would be read as one more directory.
+  "$CLAUDE_BIN" -p "${plugin_args[@]}" --settings "$SETTINGS_FILE" "${add_dirs[@]}" <<< "$prompt"
 ) > "$run_out" 2>&1
 claude_exit=$?
 cat "$run_out" >> "$LOG_FILE"
@@ -85,7 +112,7 @@ if sb_auth_failed "$run_out"; then
   sb_notify "Second brain" "Weekly review didn't run: open Terminal, run claude, and sign in again."
 else
   sb_log "$LOG_FILE" "FAILED (exit=$claude_exit, no dream branch created or updated — see the output above)"
-  sb_notify "Second brain" "Weekly review failed. Log: ~/Library/Logs/second-brain/dream.log"
+  sb_notify "Second brain" "Weekly review failed. Log: $LOG_FILE"
 fi
 rm -f "$run_out"
 exit 1

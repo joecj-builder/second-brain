@@ -9,7 +9,7 @@
 		<key>HOME</key>
 		<string>{{HOME}}</string>
 		<key>PATH</key>
-		<string>{{PATH}}</string>
+		<string>{{PATH}}</string>{{EXTRA_ENV}}
 	</dict>
 	<key>Label</key>
 	<string>{{LABEL}}</string>

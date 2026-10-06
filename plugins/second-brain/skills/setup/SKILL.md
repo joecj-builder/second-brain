@@ -235,29 +235,34 @@ If they want it (recommend yes):
 1. **Ask for times.** Nightly journal: default **8:00 pm**. Weekly review:
    default **Sunday 9:00 pm**. Ask whether they want a Slack DM when the
    weekly review is ready; if yes, set `SECOND_BRAIN_SLACK_DM` to their
-   member ID. Tell them that also lets the scheduled runs send Slack
+   member ID. Tell them that also lets the weekly review run send Slack
    messages without asking.
 2. **Preview.** Run the installer in dry-run mode yourself and summarize
-   what it will do in plain words (two background jobs, and which
-   permissions it adds to `~/.claude/settings.json`):
+   what it will do in plain words (two background jobs, and what those
+   jobs are allowed to do):
    ```bash
    bash "${CLAUDE_PLUGIN_ROOT}/scripts/install-scheduled-jobs.sh" --dry-run --journal-time 20:00 --dream-day sun --dream-time 21:00
    ```
-   Why the permissions: the scheduled runs happen with nobody at the
-   keyboard, so anything not on that list is silently refused and the run
-   writes nothing. The list is read-only connector tools, edits inside the
-   vault (and its dream review folder), and a few basic commands.
+   Tell them about the permissions in these words: "Only the scheduled
+   runs get these permissions; your normal Claude sessions don't change.
+   They can read Slack, Gmail, Drive, Calendar and Granola, edit files in
+   your vault, run git in the weekly-review folder, and look up your GitHub
+   PRs." If they turned on the Slack DM, add "and the weekly review can send
+   you a Slack message." Why the jobs need them: they run with nobody at
+   the keyboard, so anything not allowed is refused and the run writes
+   nothing.
 3. **Install.** Have the user run it themselves, with their chosen times
-   and any `--allow` flags from step 7 (Claude Code blocks Claude from
-   changing its own permission settings, and this way they see what it
-   does). Give them the line with the real path filled in:
+   and any `--allow` flags from step 7 (it sets up jobs that run on their
+   own, so they should be the one to start it, and this way they see what
+   it does). Give them the line with the real path filled in:
    ```
    ! bash "${CLAUDE_PLUGIN_ROOT}/scripts/install-scheduled-jobs.sh" --journal-time 20:00 --dream-day sun --dream-time 21:00
    ```
-   It backs up `settings.json` before changing it, only adds rules, and is
-   safe to run again (for example, to change the times). Never add
-   `--permission-mode` or `--dangerously-skip-permissions` to anything; the
-   allow list is the whole grant.
+   It doesn't change `~/.claude/settings.json`. `--allow` rules are saved
+   in `config.env` and only the scheduled runs use them. It's safe to run
+   again (for example, to change the times). Never add `--permission-mode`
+   or `--dangerously-skip-permissions` to anything; the per-run allow list
+   is the whole grant.
 4. **Test run.** Run one journal now, in the background, and tell the user it
    takes about 3–10 minutes:
    ```bash

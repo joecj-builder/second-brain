@@ -9,10 +9,16 @@
 #   1. Copies launch-job.sh to ~/.claude/second-brain/jobs/ (a stable path the
 #      plists can point at; the plugin's own directory changes on every update).
 #   2. Renders launchd/*.plist.template into ~/Library/LaunchAgents/.
-#   3. Adds the permissions the unattended runs need to
-#      ~/.claude/settings.json → permissions.allow (backs the file up first,
-#      only appends missing rules, never removes anything).
-#   4. Loads the jobs with launchctl.
+#   3. Loads the jobs with launchctl.
+#
+# Permissions: this script doesn't touch ~/.claude/settings.json. Each run
+# writes its own allow list to ~/.claude/second-brain/jobs/<job>-settings.json
+# and passes it with `claude -p --settings` (sb_write_job_settings in
+# job-lib.sh), so only the scheduled runs get these permissions; the user's
+# normal Claude sessions don't change. The runs can read Slack, Gmail, Drive,
+# Calendar and Granola, edit files in the vault, run a fixed set of git
+# commands in the weekly-review folder, and run the plugin's read-only
+# journal-helper.py (which also looks up the user's GitHub PRs).
 #
 # Usage:
 #   install-scheduled-jobs.sh [options]
@@ -23,27 +29,35 @@
 #     --no-dream             don't install the weekly dream (removes it if installed)
 #     --dry-run              show what would change; write nothing
 #     --no-load              write the files but don't call launchctl (testing)
-#     --skip-permissions     don't touch ~/.claude/settings.json
-#     --allow RULE           also allow this permission rule (repeatable), e.g. a
-#                            read-only tool from a connector with a non-standard name
+#     --allow RULE           also allow this rule in the scheduled runs (repeatable),
+#                            e.g. a read-only tool from a connector with a
+#                            non-standard name. Saved to config.env as
+#                            SECOND_BRAIN_JOB_EXTRA_ALLOW; never added globally.
 #     --status               show what's installed and exit
-#     --uninstall            unload and remove both jobs (permissions are left in place)
+#     --uninstall            unload and remove both jobs and everything in
+#                            ~/.claude/second-brain/jobs/
 #
 # Reads the vault from ~/.claude/second-brain/config.env (SECOND_BRAIN_VAULT).
-# Needs macOS, jq (ships with macOS 15+ at /usr/bin/jq), and Claude Code.
+# When SECOND_BRAIN_CONFIG points at another config (testing), the plists
+# carry it, so the scheduled runs use that config too.
+# Needs macOS and Claude Code.
 
 set -o pipefail
 
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="$(dirname "$SCRIPTS_DIR")"
+# A non-default config (testing) is passed on to the jobs.
+config_override=""
+if [ -n "${SECOND_BRAIN_CONFIG:-}" ] && [ "$SECOND_BRAIN_CONFIG" != "$HOME/.claude/second-brain/config.env" ]; then
+  config_override="$SECOND_BRAIN_CONFIG"
+fi
 . "$SCRIPTS_DIR/config.sh"
 
 JOURNAL_LABEL="com.second-brain.nightly-journal"
 DREAM_LABEL="com.second-brain.dream"
 AGENTS_DIR="$HOME/Library/LaunchAgents"
 JOBS_DIR="$HOME/.claude/second-brain/jobs"
-LOG_DIR="$HOME/Library/Logs/second-brain"
-SETTINGS="$HOME/.claude/settings.json"
+LOG_DIR="${SECOND_BRAIN_LOG_DIR:-$HOME/Library/Logs/second-brain}"
 
 journal_time="20:00"
 dream_day="sun"
@@ -52,7 +66,6 @@ want_journal=true
 want_dream=true
 dry_run=false
 load=true
-do_permissions=true
 mode=install
 extra_rules=()
 
@@ -67,11 +80,13 @@ while [ $# -gt 0 ]; do
     --no-dream) want_dream=false; shift ;;
     --dry-run) dry_run=true; shift ;;
     --no-load) load=false; shift ;;
-    --skip-permissions) do_permissions=false; shift ;;
-    --allow) [ -n "${2:-}" ] || die "--allow needs a rule"; extra_rules+=("$2"); shift 2 ;;
+    --allow)
+      [ -n "${2:-}" ] || die "--allow needs a rule"
+      case "$2" in *";"*) die "a rule can't contain ';' (got $2)" ;; esac
+      extra_rules+=("$2"); shift 2 ;;
     --status) mode=status; shift ;;
     --uninstall) mode=uninstall; shift ;;
-    -h|--help) sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,48p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) die "unknown option $1 (try --help)" ;;
   esac
 done
@@ -158,8 +173,8 @@ if [ "$mode" = uninstall ]; then
   unload_job "$JOURNAL_LABEL"
   unload_job "$DREAM_LABEL"
   run rm -rf "$JOBS_DIR"
-  echo "Scheduled jobs removed. The permission rules in $SETTINGS were left in place;"
-  echo "they only allow read-only connector tools and edits inside the vault."
+  echo "Scheduled jobs removed, with their launcher and permission files ($JOBS_DIR)."
+  echo "Nothing was ever added to ~/.claude/settings.json, so there's nothing to undo there."
   exit 0
 fi
 
@@ -170,10 +185,6 @@ VAULT="${SECOND_BRAIN_VAULT:-}"
 [ -d "$VAULT" ] || die "vault $VAULT does not exist"
 case "$VAULT" in /*) ;; *) die "SECOND_BRAIN_VAULT must be an absolute path (got $VAULT)" ;; esac
 VAULT="${VAULT%/}"
-
-JQ=$(command -v jq || true)
-if [ -z "$JQ" ] && [ -x /usr/bin/jq ]; then JQ=/usr/bin/jq; fi
-[ -n "$JQ" ] || die "jq not found. Install it with: brew install jq"
 
 claude_bin=$(command -v claude || true)
 [ -n "$claude_bin" ] || { [ -x "$HOME/.local/bin/claude" ] && claude_bin="$HOME/.local/bin/claude"; }
@@ -196,6 +207,9 @@ for p in "$(dirname "$claude_bin")" "$HOME/.local/bin" /opt/homebrew/bin /opt/ho
   case ":$job_path:" in *":$p:"*) ;; *) job_path="${job_path:+$job_path:}$p" ;; esac
 done
 
+# Extra plist environment: the test config, when one is in use.
+extra_env=""
+
 xml_escape() {
   local s="$1"
   s=${s//&/&amp;}
@@ -203,6 +217,12 @@ xml_escape() {
   s=${s//>/&gt;}
   printf '%s' "$s"
 }
+
+if [ -n "$config_override" ]; then
+  extra_env="
+		<key>SECOND_BRAIN_CONFIG</key>
+		<string>$(xml_escape "$config_override")</string>"
+fi
 
 # render_plist <template> <label> <hour> <minute> [weekday]
 render_plist() {
@@ -214,6 +234,7 @@ render_plist() {
   t=${t//"{{WEEKDAY}}"/"${5:-0}"}
   t=${t//"{{HOME}}"/"$(xml_escape "$HOME")"}
   t=${t//"{{PATH}}"/"$(xml_escape "$job_path")"}
+  t=${t//"{{EXTRA_ENV}}"/"$extra_env"}
   t=${t//"{{VAULT}}"/"$(xml_escape "$VAULT")"}
   t=${t//"{{LOG_DIR}}"/"$(xml_escape "$LOG_DIR")"}
   t=${t//"{{LAUNCHER}}"/"$(xml_escape "$JOBS_DIR/launch-job.sh")"}
@@ -275,104 +296,37 @@ else
   unload_job "$DREAM_LABEL"
 fi
 
-# --- 3. Permissions for the unattended runs ------------------------------------
+# --- 3. Extra permission rules (--allow) ----------------------------------------
 #
-# Headless `claude -p` can't ask for approval, so anything not allowed here is
-# silently denied and the run produces nothing. Notes:
-#   - Edit(...) covers every file-writing tool. Write(...) rules are ignored by
-#     file permission checks, so none are added.
-#   - "//" starts an absolute path in a permission rule.
-#   - Connector tools are read-only, except slack_send_message, which is only
-#     added when the weekly dream is set to DM its report (SECOND_BRAIN_SLACK_DM).
-#   - No --permission-mode flags anywhere; this allow list is the whole grant.
+# Saved to config.env, where each run's settings file picks them up. They
+# apply to the scheduled runs only.
 
-if [ "$do_permissions" = true ] && { [ "$want_journal" = true ] || [ "$want_dream" = true ]; }; then
-  # $VAULT is absolute, so "Edit(/$VAULT/**)" comes out as "Edit(//Users/...)".
-  rules=(
-    "Edit(/$VAULT/**)"
-    "Bash(ls:*)" "Bash(find:*)" "Bash(mkdir:*)" "Bash(date:*)" "Bash(wc:*)"
-  )
-  if [ "$want_journal" = true ]; then
-    rules+=(
-      "Bash(python3:*)"
-      "Bash(gh auth status:*)" "Bash(gh search:*)" "Bash(gh pr view:*)"
-      "mcp__claude_ai_Granola__get_account_info"
-      "mcp__claude_ai_Granola__get_meeting_transcript"
-      "mcp__claude_ai_Granola__get_meetings"
-      "mcp__claude_ai_Granola__list_meeting_folders"
-      "mcp__claude_ai_Granola__list_meetings"
-      "mcp__claude_ai_Granola__query_granola_meetings"
-      "mcp__claude_ai_Slack__slack_read_canvas"
-      "mcp__claude_ai_Slack__slack_read_channel"
-      "mcp__claude_ai_Slack__slack_read_file"
-      "mcp__claude_ai_Slack__slack_read_list"
-      "mcp__claude_ai_Slack__slack_read_thread"
-      "mcp__claude_ai_Slack__slack_read_user_profile"
-      "mcp__claude_ai_Slack__slack_list_channel_members"
-      "mcp__claude_ai_Slack__slack_list_user_channels"
-      "mcp__claude_ai_Slack__slack_get_reactions"
-      "mcp__claude_ai_Slack__slack_search_channels"
-      "mcp__claude_ai_Slack__slack_search_public"
-      "mcp__claude_ai_Slack__slack_search_public_and_private"
-      "mcp__claude_ai_Slack__slack_search_users"
-      "mcp__claude_ai_Gmail__search_threads"
-      "mcp__claude_ai_Gmail__get_thread"
-      "mcp__claude_ai_Google_Drive__search_files"
-      "mcp__claude_ai_Google_Drive__get_file_metadata"
-      "mcp__claude_ai_Google_Calendar__list_events"
-      "mcp__claude_ai_Google_Calendar__get_event"
-    )
-  fi
-  if [ "$want_dream" = true ]; then
-    rules+=(
-      "Bash(git:*)"
-      "Edit(/$(dirname "$VAULT")/$(basename "$VAULT")-dream-*/**)"
-    )
-    [ -n "${SECOND_BRAIN_SLACK_DM:-}" ] && rules+=("mcp__claude_ai_Slack__slack_send_message")
-  fi
-
-  [ "${#extra_rules[@]}" -gt 0 ] && rules+=("${extra_rules[@]}")
-
-  rules_json=$(printf '%s\n' "${rules[@]}" | "$JQ" -R . | "$JQ" -s .)
-
-  if [ -f "$SETTINGS" ]; then
-    "$JQ" empty "$SETTINGS" 2>/dev/null || die "$SETTINGS isn't valid JSON; fix it (or move it aside) and re-run"
-    current="$SETTINGS"
-  else
-    current=""
-  fi
-
-  # shellcheck disable=SC2016  # $a/$new/$r are jq variables
-  missing=$(
-    { if [ -n "$current" ]; then cat "$current"; else echo '{}'; fi; } |
-      "$JQ" -r --argjson new "$rules_json" \
-        '(.permissions.allow // []) as $a | $new[] | select(. as $r | $a | any(. == $r) | not)'
-  )
-
-  echo "== Permissions for the unattended runs ($SETTINGS → permissions.allow)"
-  if [ -z "$missing" ]; then
+if [ "${#extra_rules[@]}" -gt 0 ]; then
+  current_rules=$(sb_split_rules "${SECOND_BRAIN_JOB_EXTRA_ALLOW:-}")
+  merged="${SECOND_BRAIN_JOB_EXTRA_ALLOW:-}"
+  added=()
+  for r in "${extra_rules[@]}"; do
+    if ! printf '%s\n' "$current_rules" | grep -qxF -- "$r"; then
+      added+=("$r")
+      merged="${merged:+$merged;}$r"
+      current_rules="$current_rules
+$r"
+    fi
+  done
+  echo "== Extra rules for the scheduled runs ($SECOND_BRAIN_CONFIG → SECOND_BRAIN_JOB_EXTRA_ALLOW)"
+  if [ "${#added[@]}" -eq 0 ]; then
     echo "Already in place."
   else
-    echo "Adding:"
-    printf '%s\n' "$missing" | sed 's/^/  + /'
+    printf '  + %s\n' "${added[@]}"
     if [ "$dry_run" = false ]; then
-      mkdir -p "$(dirname "$SETTINGS")"
-      if [ -n "$current" ]; then
-        backup="$SETTINGS.bak-$(date +%Y%m%d-%H%M%S)"
-        cp "$SETTINGS" "$backup"
-        echo "Backed up the old settings to $backup"
-      fi
-      tmp=$(mktemp "${TMPDIR:-/tmp}/sb-settings.XXXXXX")
-      # shellcheck disable=SC2016  # jq variables
-      { if [ -n "$current" ]; then cat "$current"; else echo '{}'; fi; } |
-        "$JQ" --argjson new "$rules_json" '
-          .permissions = (.permissions // {})
-          | .permissions.allow = ((.permissions.allow // []) as $a
-              | $a + [$new[] | select(. as $r | $a | any(. == $r) | not)])
-        ' > "$tmp" || { rm -f "$tmp"; die "couldn't update $SETTINGS"; }
-      [ -n "$current" ] && chmod "$(stat -f '%Lp' "$SETTINGS")" "$tmp"
-      mv "$tmp" "$SETTINGS"
-      echo "Updated $SETTINGS"
+      [ -f "$SECOND_BRAIN_CONFIG" ] || die "$SECOND_BRAIN_CONFIG not found; run /second-brain:setup first"
+      quoted="'${merged//\'/\'\\\'\'}'"
+      tmp=$(mktemp "${TMPDIR:-/tmp}/sb-config.XXXXXX")
+      grep -v '^SECOND_BRAIN_JOB_EXTRA_ALLOW=' "$SECOND_BRAIN_CONFIG" > "$tmp"
+      printf 'SECOND_BRAIN_JOB_EXTRA_ALLOW=%s\n' "$quoted" >> "$tmp"
+      chmod "$(stat -f '%Lp' "$SECOND_BRAIN_CONFIG")" "$tmp"
+      mv "$tmp" "$SECOND_BRAIN_CONFIG"
+      echo "Updated $SECOND_BRAIN_CONFIG"
     fi
   fi
 fi
@@ -392,5 +346,7 @@ if [ "$want_dream" = true ]; then
 fi
 echo "If the Mac is asleep at that time, the job runs when it wakes up. If it's"
 echo "shut down, the next evening's journal run catches up the missed weekdays."
+echo "Only these scheduled runs get the permissions they need, one run at a time;"
+echo "your normal Claude sessions don't change."
 echo "Logs: $LOG_DIR"
 echo "Test the journal now: bash \"$JOBS_DIR/launch-job.sh\" nightly-journal --date $(date +%Y-%m-%d)"

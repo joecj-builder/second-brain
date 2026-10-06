@@ -1,6 +1,6 @@
 {
   "name": "second-brain",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Use an Obsidian vault as Claude Code's persistent memory store: lookup/write protocol, /document, /dream, an automatic /document when a session ends, and a nightly journal + weekly /dream on a schedule (macOS).",
   "author": {
     "name": "josephcoz",

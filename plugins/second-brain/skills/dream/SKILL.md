@@ -10,7 +10,8 @@ description: >
   "consolidate memory", "clean up the second brain", or on the weekly
   schedule. Modes: default (full weekly consolidation), --quick (fast
   MEMORY.md trim + obvious merges), --notify (Slack DM the report; the
-  weekly scheduled run only).
+  weekly scheduled run only), --dream-dir (where worktrees go; the
+  scheduled run passes it).
 allowed-tools: Bash, Read, Edit, Write, Glob, Grep
 ---
 
@@ -32,43 +33,68 @@ store stays fast for Claude to consume.
 ## Step 0 — Resolve context, mode, and guards
 
 1. **Vault + config.** The vault is in the session-start context ("Second brain
-   vault: …"). Read `~/.claude/second-brain/config.env` for `SECOND_BRAIN_VAULT`
-   (fallback), `SECOND_BRAIN_TIMEZONE`, and `SECOND_BRAIN_SLACK_DM`. Call the
-   vault `<vault>`.
+   vault: …"). Call it `<vault>`. The scheduled run starts *in* the vault.
 2. **Parse args:** `--quick` (fast mode), `--notify` (send Slack DM — the weekly
-   scheduled run passes this; on-demand `/dream` must NOT), `--since YYYY-MM-DD`
-   (override the window).
-3. **Guards — bail with a clear message if any fail:**
-   - Vault must be a git repo: `git -C <vault> rev-parse --git-dir` succeeds. If not:
+   scheduled run passes this; on-demand `/dream` must NOT), `--slack-dm <ID>`
+   (where to send it), `--dream-dir "<path>"` (where dream worktrees go),
+   `--since YYYY-MM-DD` (override the window).
+   - **Scheduled run** (`--dream-dir` given): everything you need is in the
+     args. Don't read `~/.claude/second-brain/config.env`; it is outside the
+     folders this run may read. It runs unattended, so never stop to ask.
+   - **On-demand run:** read `~/.claude/second-brain/config.env` for
+     `SECOND_BRAIN_DREAM_DIR` (default `~/.claude/second-brain/dream-worktrees`)
+     and `SECOND_BRAIN_TIMEZONE`.
+   Call the worktree folder `<dream-dir>`.
+3. **Work from inside the vault**, then from inside the worktree. Run plain
+   `git <subcommand>` from the right folder: no `git -C`, no compound
+   `&&` chains. The scheduled run only allows these git subcommands:
+   `rev-parse`, `status`, `for-each-ref`, `log`, `diff`, `show`,
+   `worktree add`, `worktree list`, `add`, `commit`, `rm`. Use the Read,
+   Glob, Grep, Write and Edit tools for files, `date` for dates, and the
+   session helper in Step 2. Nothing else (no `mv`, `rm`, `mkdir`, `find`,
+   `python3 -c`).
+4. **Guards — bail with a clear message if any fail** (from inside `<vault>`):
+   - Vault must be a git repo: `git rev-parse --git-dir` succeeds. If not:
      *"Vault isn't git-backed yet — run `git init` in `<vault>` first. Dreams need git for the non-destructive review branch."* Stop.
-   - Working tree should be clean-ish on `main`: `git -C <vault> status --porcelain`.
-     If there are uncommitted changes, commit them first (`pre-dream snapshot`) so
-     the dream branch diffs cleanly. Tell the user you did this.
-   - No existing dream branch for this period (see Step 1); if one exists, ask
-     whether to resume it or start fresh.
+   - Working tree should be clean-ish on `main`: `git status --porcelain`.
+     If there are uncommitted changes, commit them first so the dream branch
+     diffs cleanly: `git add -A`, then `git commit -m "pre-dream snapshot"`.
+     Tell the user you did this.
+   - No existing dream branch for this period: `git for-each-ref refs/heads/dream/`
+     (see Step 1 for the label). If one exists: on demand, ask whether to
+     resume it or start fresh; in a scheduled run, stop and say it's waiting
+     for review.
 
 ## Step 1 — Set up the dream worktree (non-destructive)
 
 Compute the period label from the window end date: ISO week `YYYY-Wxx`
-(`date +%G-W%V`). Then create an **isolated git worktree** so Obsidian (which
-follows the live vault on `main`) is never disturbed while the dream runs:
+(`date +%G-W%V`). Then create an **isolated git worktree** inside
+`<dream-dir>` so Obsidian (which follows the live vault on `main`) is never
+disturbed while the dream runs. From inside `<vault>`, with absolute paths:
 
 ```bash
-cd <vault>
-git worktree add ../$(basename <vault>)-dream-<YYYY-Wxx> -b dream/<YYYY-Wxx>
+git worktree add "<dream-dir>/<vault-folder-name>-<YYYY-Wxx>" -b dream/<YYYY-Wxx>
 ```
 
+(`<vault-folder-name>` is the last part of the vault path. The scheduled
+runner creates `<dream-dir>`; on demand, it is created by `git worktree add`.)
+
 All reads-of-the-store for *editing* and **all writes** happen inside that
-worktree dir (call it `$DREAM`). Never edit files under the live `<vault>`
-path during a dream.
+worktree (call it `$DREAM`, an absolute path). `cd "$DREAM"` once, and run
+every later git command from there. Never edit files under the live
+`<vault>` path during a dream.
 
 ## Step 2 — Gather inputs (the two dream input types)
 
 - **The memory store** (read from `$DREAM`): `Memory/MEMORY.md`, `Topics/`,
   `People/`, `DataContext/`. This is what gets reorganized.
 - **The sessions** (read-only, NEVER rewritten — the evidence the dream mines):
-  - This window's Claude Code transcripts: `~/.claude/projects/*/*.jsonl`
-    modified within the window (`find ~/.claude/projects -name '*.jsonl' -newermt <start>`).
+  - This window's Claude Code and Claude desktop sessions, summarized by the
+    plugin's read-only helper (in a scheduled run use exactly this form, with
+    the absolute path, so it matches the allow rule):
+    `python3 -I ${CLAUDE_PLUGIN_ROOT}/scripts/journal-helper.py sessions --since <start> --until <end> --max-chars 60000`.
+    Open a specific transcript under `~/.claude/projects/` with Read only if
+    a summary isn't enough.
   - This window's `Sessions/` handoffs (written by `/document --auto`).
   - This window's `Journal/` daily entries and `Meetings/` notes.
   Window = `--since` if given, else since the last dream (most recent
@@ -110,8 +136,13 @@ and `Memory/`. Apply the locked prune policy:
   `DataContext/` (the recall entry point — keeping it current saves tokens in
   every daytime session).
 
-Commit the consolidation to the branch:
-`git -C $DREAM add -A && git -C $DREAM commit -m "dream <YYYY-Wxx>: consolidate memory store"`.
+**Moving and deleting notes** (there is no `mv` or `rm`): to archive a
+note, Write its content to the `_archive/` path, then `git rm "<old path>"`.
+To delete a merged duplicate, `git rm "<path>"`.
+
+Commit the consolidation to the branch, from inside `$DREAM`, as two
+commands: `git add -A`, then
+`git commit -m "dream <YYYY-Wxx>: consolidate memory store"`.
 
 ## Step 4 — Weekly rollup (full mode only; skip in --quick)
 
@@ -152,16 +183,20 @@ Write `$DREAM/Dream-Report.md` AND print it to the terminal. Open with a
 - New `Topics/<X>.md` — mentioned in 4 sessions, was ungrounded
 
 ## Review
-- Diff:    git -C <vault> diff main..dream/<YYYY-Wxx>
+- Diff:    git -C "<vault>" diff main..dream/<YYYY-Wxx>
 - Adopt:   bash ${CLAUDE_PLUGIN_ROOT}/scripts/adopt-dream.sh <YYYY-Wxx>
-- Discard: git -C <vault> worktree remove ../<...>-dream-<YYYY-Wxx> && git -C <vault> branch -D dream/<YYYY-Wxx>
+- Discard: bash ${CLAUDE_PLUGIN_ROOT}/scripts/adopt-dream.sh <YYYY-Wxx> --discard
 ```
+
+Write the real absolute paths into the Review block (the vault path, and
+the plugin's script path as it appears in this skill), so the commands work
+from any folder. These are for the user to run later; don't run them.
 
 ## Step 6 — Notify (ONLY if --notify)
 
 If and only if `--notify` was passed (weekly scheduled run), send the Defrag
-summary + Review block as a Slack DM to `SECOND_BRAIN_SLACK_DM` (via the Slack
-connector). If it isn't set or no Slack tool is available, say so and skip. On
+summary + Review block as a Slack DM to the `--slack-dm` ID (on demand,
+`SECOND_BRAIN_SLACK_DM` from config.env) via the Slack connector. If it isn't set or no Slack tool is available, say so and skip. On
 on-demand `/dream`, send nothing to Slack — the terminal + `Dream-Report.md`
 are the whole output.
 

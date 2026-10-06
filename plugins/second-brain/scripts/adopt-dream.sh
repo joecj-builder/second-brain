@@ -1,7 +1,8 @@
 #!/bin/bash
 # adopt-dream.sh — adopt (merge) or discard a dream branch.
 #
-# A dream runs on an isolated branch + worktree; the live vault stays on `main`.
+# A dream runs on an isolated branch + worktree (under SECOND_BRAIN_DREAM_DIR);
+# the live vault stays on `main`.
 # This script is the explicit adoption gate.
 #
 # Usage:
@@ -17,7 +18,12 @@ WEEK="${1:?usage: adopt-dream.sh <YYYY-Wxx> [--discard]}"
 MODE="${2:-adopt}"
 VAULT="${SECOND_BRAIN_VAULT:?no vault configured; run /second-brain:setup}"
 BRANCH="dream/${WEEK}"
-WORKTREE="$(dirname "$VAULT")/$(basename "$VAULT")-dream-${WEEK}"
+VAULT="${VAULT%/}"
+DREAM_DIR="${SECOND_BRAIN_DREAM_DIR:-$HOME/.claude/second-brain/dream-worktrees}"
+# Current location first; dreams from plugin 0.2.0 and earlier used a sibling
+# of the vault.
+WORKTREE="${DREAM_DIR%/}/$(basename "$VAULT")-${WEEK}"
+[ -d "$WORKTREE" ] || WORKTREE="$(dirname "$VAULT")/$(basename "$VAULT")-dream-${WEEK}"
 
 cd "$VAULT"
 
