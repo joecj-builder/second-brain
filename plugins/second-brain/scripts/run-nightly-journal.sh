@@ -258,11 +258,14 @@ CLAUDE_BIN=$(sb_claude_bin) || {
   exit 1
 }
 
-# claude -p scopes file access to its cwd (the vault) plus --add-dir. The
-# helper script reads session transcripts itself, so the only outside folder
-# the run needs is the user's optional daily notes.
+# claude -p scopes file access to its cwd (the vault) plus --add-dir (read
+# only; Edit is limited to the vault by the settings file). The helper
+# summarizes sessions itself; the transcripts folder is there so the run can
+# open one when a summary is too thin. Plus the user's optional daily notes.
 add_dirs=()
-[ -d "$DAILY_NOTES_DIR" ] && add_dirs+=(--add-dir "$DAILY_NOTES_DIR")
+for dir in "$HOME/.claude/projects" "$DAILY_NOTES_DIR"; do
+  [ -d "$dir" ] && add_dirs+=(--add-dir "$dir")
+done
 
 plugin_args=()
 while IFS= read -r a; do
