@@ -52,11 +52,25 @@ Lessons baked in (from the first hand-built setup):
 
 - launchd has no shell PATH; the plists set `PATH` (incl. `~/.local/bin`,
   `/opt/homebrew/bin`) and `HOME`.
-- Headless `claude -p` silently denies anything not in
-  `permissions.allow`, and can still exit 0. The runners check that the
-  journal file / dream branch actually changed. `Edit(...)` rules cover
-  file writes; `Write(...)` rules are ignored. No `--permission-mode`
-  flags (auto mode blocks creating jobs with them).
+- Headless `claude -p` silently denies anything not allowed, and can still
+  exit 0. The runners check that the journal file / dream branch actually
+  changed. `Edit(...)` rules cover file writes; `Write(...)` rules are
+  ignored. No `--permission-mode` flags (auto mode blocks creating jobs
+  with them).
+- The allow list is per run, never global: each run writes
+  `~/.claude/second-brain/jobs/<job>-settings.json` and passes it with
+  `--settings` (it merges with the user's settings; its deny rules win over
+  their allow rules). Verified with real `claude -p` runs on 2.1.292. The
+  journal may edit only the vault and run only the plugin's read-only
+  `journal-helper.py` (sessions, file changes, GitHub) and `date`; the dream
+  may edit only `SECOND_BRAIN_DREAM_DIR` and run a fixed list of git
+  subcommands. Both deny `git push`, `rm`, `curl` and `python3 -c`. Extra
+  rules go in `SECOND_BRAIN_JOB_EXTRA_ALLOW` (`install-scheduled-jobs.sh
+  --allow`). An allow list that includes `python3:*` or `find:*` isn't a
+  boundary: a run denied the Write tool once wrote outside the vault with
+  `python3 -c` instead.
+- `--add-dir` takes several values, so a prompt argument after it is read as
+  a directory. Pass the prompt on stdin.
 - macOS ships bash 3.2: no associative arrays, no negative array offsets,
   no `set -u` with possibly-empty arrays.
 - Headless sign-in can expire ("OAuth session expired"). The runners detect

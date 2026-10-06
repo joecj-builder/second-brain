@@ -40,5 +40,27 @@ lookup, writing rules, Learning Loop) lives in
   placeholders: `templates/`, `launchd/`, the setup skill's vault-template
   step, and the scripts that fill them.
 - **Scheduled-job scripts run under macOS's `/bin/bash` 3.2.** Check with
-  `bash -n` and `shellcheck`, and test `install-scheduled-jobs.sh` against a
+  `bash -n` and `shellcheck -x`, and test `install-scheduled-jobs.sh` against a
   throwaway `HOME` with `--no-load` (no `launchctl`) or `--dry-run`.
+- **Scheduled jobs never touch `~/.claude/settings.json`.** Their permissions
+  come from `sb_write_job_settings` in `scripts/job-lib.sh`, passed per run
+  with `--settings`. If a prompt or skill the jobs run starts using a new
+  tool or command, add the narrowest matching rule there (and keep
+  `skills/dream/SKILL.md`'s git list in sync with `SB_DREAM_GIT`).
+- **Test scheduled-job changes with real runs, not just a fake `claude`.** A
+  fake can't catch CLI argument or permission problems. Use a test config
+  that sets `SECOND_BRAIN_VAULT` (a throwaway vault, or a `git clone` of a
+  real one for the dream), `SECOND_BRAIN_LOG_DIR` and
+  `SECOND_BRAIN_DREAM_DIR`, then run from the working tree:
+  ```bash
+  export SECOND_BRAIN_CONFIG=/path/to/test/config.env
+  bash plugins/second-brain/scripts/run-nightly-journal.sh --date YYYY-MM-DD
+  bash plugins/second-brain/scripts/run-dream.sh
+  ```
+  (a working-tree run passes `--plugin-dir` itself). Pass if the log says
+  `OK:` and the session transcript in `~/.claude/projects/<vault path>/`
+  shows no unexpected permission denials. For launchd, run
+  `install-scheduled-jobs.sh` with that `SECOND_BRAIN_CONFIG` set (the plist
+  carries it), `launchctl kickstart gui/$(id -u)/com.second-brain.nightly-journal`,
+  then `--uninstall`. On a machine that runs a real second brain, also check
+  that its vault, its state file and its own jobs didn't change.

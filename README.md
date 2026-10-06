@@ -5,6 +5,17 @@ ephemeral; the vault is permanent. Claude reads it before guessing, writes
 durable facts into it as it learns them, hands off each session into it, and
 periodically consolidates it on a review branch.
 
+## Why it exists
+
+**Purpose:** Claude keeps a copy of your brain, with better memory and
+recall than you have.
+
+**Principle:** Claude should know everything you know, so it should take in
+the same things you do during your day: Slack, email, meetings, docs, and
+your Claude sessions. That's why setup asks you to connect those tools, and
+why the nightly journal reads them each evening and writes down what
+happened.
+
 ## Not a developer? Start here
 
 You need a Mac, Claude Code (`curl -fsSL https://claude.ai/install.sh | bash`
@@ -88,11 +99,19 @@ update on their own.
     prompt is `plugins/second-brain/templates/nightly-journal.md`.
   - `com.second-brain.dream` runs `/second-brain:dream` weekly (default
     Sunday 9pm).
-  - Headless runs can't ask for permission, so the installer adds a
-    read-only allow list to `~/.claude/settings.json` (backed up first).
+  - Headless runs can't ask for permission, so each run gets its own allow
+    list, written to `~/.claude/second-brain/jobs/<job>-settings.json` and
+    passed with `claude -p --settings`. Only the scheduled runs get these
+    permissions; your normal Claude sessions don't change, and
+    `~/.claude/settings.json` is never touched. The runs can read Slack,
+    Gmail, Drive, Calendar and Granola, edit files in your vault, run a
+    fixed set of git commands in the weekly-review folder
+    (`~/.claude/second-brain/dream-worktrees/`), and look up your GitHub
+    PRs through the plugin's read-only `journal-helper.py`. They can't push,
+    delete files with `rm`, run `curl`, or run arbitrary Python.
     Logs are in `~/Library/Logs/second-brain/`; failures also show a macOS
     notification. Re-run the installer with `--status`, new times, or
-    `--uninstall`.
+    `--uninstall` (which removes everything it installed).
 
 ## What the plugins don't carry
 
