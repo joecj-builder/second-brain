@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Rendered by install-scheduled-jobs.sh. Fires every day at the chosen
+     time; the runner only journals weekdays (and backfills missed ones), so
+     a weekend fire catches up on a missed Friday and otherwise does nothing. -->
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>HOME</key>
+		<string>{{HOME}}</string>
+		<key>PATH</key>
+		<string>{{PATH}}</string>
+	</dict>
+	<key>Label</key>
+	<string>{{LABEL}}</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/bash</string>
+		<string>{{LAUNCHER}}</string>
+		<string>nightly-journal</string>
+	</array>
+	<key>RunAtLoad</key>
+	<false/>
+	<key>StandardErrorPath</key>
+	<string>{{LOG_DIR}}/nightly-journal-launchd.log</string>
+	<key>StandardOutPath</key>
+	<string>{{LOG_DIR}}/nightly-journal-launchd.log</string>
+	<key>StartCalendarInterval</key>
+	<dict>
+		<key>Hour</key>
+		<integer>{{HOUR}}</integer>
+		<key>Minute</key>
+		<integer>{{MINUTE}}</integer>
+	</dict>
+	<key>WorkingDirectory</key>
+	<string>{{VAULT}}</string>
+</dict>
+</plist>

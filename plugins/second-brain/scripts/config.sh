@@ -9,6 +9,10 @@
 #   SECOND_BRAIN_KEEP_AWAKE            true = keep the Mac awake while Claude works
 #   SECOND_BRAIN_AUTODOC               false = don't /document on session end (default true)
 #   SECOND_BRAIN_AUTODOC_MIN_PROMPTS   prompts needed before auto-document runs (default 3)
+#   SECOND_BRAIN_SLACK_USER_ID         the user's Slack member ID, for the nightly journal's Slack search
+#   SECOND_BRAIN_NIGHTLY_JOURNAL_CAP   max missed weekdays one nightly run backfills (default 5)
+#   SECOND_BRAIN_NIGHTLY_JOURNAL_TEMPLATE  custom nightly journal prompt (default: templates/nightly-journal.md)
+#   SECOND_BRAIN_JOB_NOTIFY            false = no macOS notifications from the scheduled jobs (default true)
 
 SECOND_BRAIN_CONFIG="${SECOND_BRAIN_CONFIG:-$HOME/.claude/second-brain/config.env}"
 if [ -f "$SECOND_BRAIN_CONFIG" ]; then

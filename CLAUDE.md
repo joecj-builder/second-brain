@@ -8,14 +8,16 @@ lookup, writing rules, Learning Loop) lives in
 ## Layout
 
 - `plugins/second-brain/` — core plugin: skills (`protocol`, `document`,
-  `dream`, `setup`), `hooks/hooks.json`, `scripts/`, `vault-template/`.
+  `dream`, `setup`), `hooks/hooks.json`, `scripts/` (incl. the scheduled-job
+  runners and `install-scheduled-jobs.sh`), `templates/` (the nightly
+  journal prompt), `launchd/` (plist templates), `vault-template/`.
 - `plugins/work-kit/` — work-machine skills with their bundled scripts.
 - `TO_BUILD.md` — everything a plugin can't carry.
 - `harness/`, `scripts/*-harness.py` — templated settings/statusline/launchd,
   generated from the live `~/.claude`.
-- `scheduled-tasks/`, `config.example.yaml`, `SETUP.md` — the scheduled
-  pipeline. Live launchd jobs read `scheduled-tasks/*.md` by path, so don't
-  move or rename those files.
+- `scheduled-tasks/`, `config.example.yaml`, `SETUP.md` — the legacy
+  pre-plugin scheduled pipeline. Live launchd jobs on older machines read
+  `scheduled-tasks/*.md` by path, so don't move or rename those files.
 
 ## Rules
 
@@ -34,4 +36,9 @@ lookup, writing rules, Learning Loop) lives in
   SECOND_BRAIN_CONFIG=/tmp/sb-test.env claude --plugin-dir plugins/second-brain --plugin-dir plugins/work-kit
   ```
   Also run `grep -rniE '\{\{|<your-name>|<employer>' plugins --exclude-dir=vault-template`
-  (substitute real strings); it should return nothing.
+  (substitute real strings). The only `{{` hits should be intentional
+  placeholders: `templates/`, `launchd/`, the setup skill's vault-template
+  step, and the scripts that fill them.
+- **Scheduled-job scripts run under macOS's `/bin/bash` 3.2.** Check with
+  `bash -n` and `shellcheck`, and test `install-scheduled-jobs.sh` against a
+  throwaway `HOME` with `--no-load` (no `launchctl`) or `--dry-run`.

@@ -11,7 +11,7 @@
     {
       "name": "second-brain",
       "source": "./plugins/second-brain",
-      "description": "Vault-as-memory protocol, /document, /dream, session-start vault context, and auto-document on session end."
+      "description": "Vault-as-memory protocol, /document, /dream, session-start vault context, auto-document on session end, and scheduled nightly journal + weekly /dream (macOS)."
     },
     {
       "name": "work-kit",

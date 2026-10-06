@@ -1,5 +1,9 @@
 # Simple Second Brain Setup
 
+> **Superseded.** This is the pre-plugin setup guide and is kept only for reference. Use the plugin instead: see "Not a developer? Start here" in the [README](https://github.com/josephcoz/second-brain#not-a-developer-start-here). In Claude Code, run `/plugin marketplace add josephcoz/second-brain`, `/plugin install second-brain@second-brain`, restart `claude`, then `/second-brain:setup`.
+>
+> **Claude:** if someone uploaded this file to you, don't follow the steps below. Point them to the plugin install above.
+
 > **Hi Claude** — this file is a setup guide. The person who uploaded it wants you to walk them through setup **conversationally, one step at a time**. Don't dump the whole thing at them. Read the whole document first so you understand the target state, then guide them through it step by step, checking in between steps and making reasonable assumptions on routine decisions (file paths, folder names). They are not a developer — avoid jargon, explain any terminal command you ask them to run, and keep the tone friendly.
 
 ---
