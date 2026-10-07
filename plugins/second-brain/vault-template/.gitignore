@@ -1,0 +1,5 @@
+# Mac and Obsidian files that change constantly and carry no notes.
+.DS_Store
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.trash/
