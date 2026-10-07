@@ -329,7 +329,9 @@ for target_date in "${dates[@]}"; do
   # The real signal is whether the journal file was created or updated.
   if [ "$claude_exit" -eq 0 ] && [ -n "$after_mtime" ] && [ "$after_mtime" != "$before_mtime" ]; then
     sb_log "$LOG_FILE" "OK: $target_date"
-    advance_marker "$target_date"
+    # A manual run for today (setup's test run) leaves the marker alone, so
+    # this evening's scheduled run still journals the whole day.
+    [ "$FORCE_DATE" = "$TODAY" ] || advance_marker "$target_date"
     [ -z "$FORCE_DATE" ] && set_failures "$target_date" 0
     rm -f "$rendered" "$run_out"
     continue
