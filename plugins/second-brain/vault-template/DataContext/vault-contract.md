@@ -37,6 +37,27 @@ This document defines the structure, conventions, and rules for all writers (hum
 | Analysis | `Descriptive-Title.md` | `Q1-Revenue-Deep-Dive.md` |
 | DataContext | `descriptive-name.md` | `vault-contract.md` |
 
+## DataContext Frontmatter
+
+Every `DataContext/` note starts with frontmatter. Lookups, and the hook that
+adds matching notes to subagent briefs, match on the filename, `name`,
+`description` and the optional `keywords` list, so the description should name
+everything the note covers.
+
+```yaml
+---
+name: usage-vs-plan-sot
+description: Usage vs plan limits for every type (seats, storage, API calls) comes from the billing dashboard; per-type rules and traps
+keywords: [usage vs plan, overage, seats, storage, api calls, billing dashboard]
+metadata:
+  type: reference
+---
+```
+
+`keywords` lists the nouns, synonyms and field or table names people would use
+when they need the note. `/second-brain:dream` suggests keywords for notes that
+lack them.
+
 ## Wiki Link Conventions
 
 ### Link Targets by Type

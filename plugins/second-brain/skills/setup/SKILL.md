@@ -145,6 +145,7 @@ unless the user says otherwise:
 | `SECOND_BRAIN_SLACK_DM` | empty | Slack channel or member ID that `/dream --notify` DMs the weekly report to |
 | `SECOND_BRAIN_NIGHTLY_JOURNAL_CAP` | `5` | Most missed weekdays one nightly run will catch up |
 | `SECOND_BRAIN_KEEP_AWAKE` | `false` | macOS: keep the Mac awake with the lid closed while Claude works (step 9) |
+| `SECOND_BRAIN_SUBAGENT_CONTEXT` | `inject` | When Claude starts a subagent, add the vault's matching DataContext notes to its brief (`inject`), only remind Claude to (`remind`), refuse the launch until the brief names them (`deny`), or do nothing (`off`) |
 
 Write it as plain `KEY="value"` lines with a header comment saying the file
 was written by `/second-brain:setup`. `mkdir -p ~/.claude/second-brain` first.

@@ -145,6 +145,21 @@ and `Memory/`. Apply the locked prune policy:
   the graph; keep it a thin mount-description (identity + routing table + pointer
   to `Topic-Index.md` + a few durable hot facts). Target well under the 25KB /
   200-line auto-load limit.
+- **Make DataContext notes findable.** Lookups and the subagent hook match
+  a note on its filename, `description:` and `keywords:` (see the protocol
+  skill's "Frontmatter for DataContext notes").
+  - **Suggest keywords.** For DataContext notes with no `keywords:` line
+    (skip `working-with-user/`), add one after `description:`: the nouns,
+    synonyms, and field or table names the note is about, taken from its
+    own headings and text. Never invent a term the note doesn't support. At
+    most 15 notes per run, those with the most inbound links first.
+  - **Flag narrow index lines.** For each `MEMORY.md` pointer and each
+    DataContext `description:`, compare it with the note's `##` headings.
+    If the note covers things the line doesn't name (e.g. a line about one
+    metric on a note whose later sections cover five), widen the
+    description to name them, and widen the `MEMORY.md` pointer if it's
+    short enough to stay one line. When the right wording isn't clear,
+    list the line under `## Needs the user's call` instead.
 - **Regenerate `Topics/Topic-Index.md`** by scanning `Topics/`, `People/`,
   `DataContext/` (the recall entry point — keeping it current saves tokens in
   every daytime session).
@@ -185,6 +200,7 @@ Write `$DREAM/Dream-Report.md` AND print it to the terminal. Open with a
 - Insights surfaced (new/enriched Topics & People): N
 - MEMORY.md: <before>KB → <after>KB
 - Orphan notes linked:       N
+- Keywords added:            N   (index lines widened: M)
 
 ## Merges
 - `People/Jon Doe (1).md` → merged into `People/Jon Doe.md` (deleted dup)
@@ -194,6 +210,9 @@ Write `$DREAM/Dream-Report.md` AND print it to the terminal. Open with a
 - `DataContext/x.md`: PEPM floor $5 → $6 (latest, per 2026-05-20 journal)
 ## Insights
 - New `Topics/<X>.md` — mentioned in 4 sessions, was ungrounded
+## Findability
+- `DataContext/x.md`: keywords added [seats, users, bandwidth]
+- `DataContext/y.md`: description widened (said "credits"; the note covers all overage types)
 
 ## Review
 - Diff:    git -C "<vault>" diff main..dream/<YYYY-Wxx>

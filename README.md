@@ -43,7 +43,7 @@ This repo is a Claude Code **plugin marketplace** with two plugins:
 
 | Plugin | Install on | What it adds |
 |---|---|---|
-| `second-brain` | every machine | `/second-brain:protocol` (lookup and write rules), `/second-brain:document`, `/second-brain:dream`, `/second-brain:setup`, a SessionStart hook that names the vault, an automatic `/document` when a session ends, and (macOS) a scheduled nightly journal + weekly `/dream` |
+| `second-brain` | every machine | `/second-brain:protocol` (lookup and write rules), `/second-brain:document`, `/second-brain:dream`, `/second-brain:setup`, a SessionStart hook that names the vault, a hook that adds matching DataContext notes to subagent briefs, an automatic `/document` when a session ends, and (macOS) a scheduled nightly journal + weekly `/dream` |
 | `work-kit` | work machines | `/work-kit:make-google-doc`, `/work-kit:hex`, `/work-kit:share-scrubbed-brain` |
 
 One machine has one second brain. The vault is picked once, at setup.
@@ -80,6 +80,34 @@ update on their own.
   `/second-brain:protocol` before touching the vault.
 - **Auto-memory** writes to `<vault>/Memory/`; `MEMORY.md` there is the
   manifest Claude loads every session.
+- **Subagent briefs get the matching DataContext notes.** A `PreToolUse`
+  hook on the `Agent` tool (`scripts/datacontext-match.sh --hook`) matches
+  the subagent's prompt against `<vault>/DataContext/**/*.md` (filename,
+  `name`, `description` and an optional `keywords:` list; IDF-weighted token
+  overlap; `_archive/` skipped, `working-with-user/` only on a strong match)
+  and appends up to 5 notes (~1,500 characters) to the prompt, with "Read
+  these before defining metrics or writing SQL; follow an existing source of
+  truth over re-deriving." No match adds nothing; any error exits 0 silently,
+  so it never blocks a launch. It takes about 35 ms on a 100-note vault.
+  `SECOND_BRAIN_SUBAGENT_CONTEXT` in the config picks the behavior: `inject`
+  (default), `remind` (tell the main model only), `deny` (refuse the launch
+  until the prompt names the notes) or `off`. Try the matcher by hand with
+  `bash plugins/second-brain/scripts/datacontext-match.sh --scores "<text>"`;
+  tests are `plugins/second-brain/tests/datacontext-match-test.sh` (plus
+  your own cases in `~/.claude/second-brain/datacontext-goldens.tsv`).
+  - **Why a hook, not memory:** subagents don't see the vault. Per the
+    [sub-agents docs](https://code.claude.com/docs/en/sub-agents), a
+    subagent gets its own system prompt and environment details, not the
+    main conversation's auto memory (`MEMORY.md`); it does load CLAUDE.md
+    (except Explore and Plan). The docs don't say SessionStart fires for
+    subagents; assume it doesn't.
+  - **Why `PreToolUse` and not `SubagentStart`:** `SubagentStart` can add
+    context to a subagent but isn't given its prompt, so it can't match on
+    it. `PreToolUse` gets `tool_input.prompt` and can replace it with
+    `updatedInput`. Checked with real headless runs (Claude Code, 2026-11):
+    the tool name is `Agent`, the rewritten prompt reaches the subagent, the
+    `additionalContext` reaches the main model, and the call isn't denied in
+    default or auto permission mode.
 - **`/document`** writes a handoff (plan file, `NEXT_SESSION.md`, or the vault)
   and persists durable facts into the vault graph.
 - **Auto-document**: when a session with at least 3 prompts ends, a

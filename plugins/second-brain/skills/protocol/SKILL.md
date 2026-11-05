@@ -3,10 +3,13 @@ name: protocol
 description: >
   How to read from and write to the second-brain vault (an Obsidian vault that
   is Claude's persistent memory store): the 3-tier lookup, vault structure,
-  naming and wiki-link conventions, writing rules, and the Learning Loop. Load
-  before any vault lookup or vault write, when the user mentions a person,
-  project, or prior work you have no context on, or when they say "check the
-  vault", "look that up", or "remember this".
+  naming and wiki-link conventions, writing rules, the "before you build"
+  check, and the Learning Loop. Load before any vault lookup or vault write;
+  before defining a business metric, writing warehouse or CRM queries,
+  choosing which field or table to read, or briefing a subagent that will
+  (even when a plan already names a source); when the user mentions a
+  person, project, or prior work you have no context on; or when they say
+  "check the vault", "look that up", or "remember this".
 ---
 
 # Second brain protocol
@@ -46,6 +49,40 @@ Follow in order. Stop as soon as you have enough.
    latest `Journal/YYYY-Wxx-rollup.md`, recent `Journal/` days, then
    `<vault>/TODO.md`.
 
+## Before you build: check DataContext first
+
+This check fires on the *task*, not on feeling unfamiliar with it. Run it
+even when you think you already have context.
+
+**Before defining a business metric, writing warehouse or CRM queries,
+choosing a field or property to read, or briefing a subagent that will do
+any of these:** search `<vault>/DataContext/` for the metric's nouns. Run
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/datacontext-match.sh "<the task, in a sentence or two>"
+```
+
+or grep filenames, `description:` and `keywords:` lines
+(`grep -riE '<noun>|<noun>' <vault>/DataContext --include='*.md' -l`).
+Read the matches. **Follow an existing source of truth over a
+re-derivation**: if a note says which dashboard, table, property or formula
+is the source of truth, use that one, and say so.
+
+- **A plan doesn't skip it.** A plan or brief that names a source ("port X's
+  formula", "use table Y") is not a reason to skip this check. Look for an
+  existing source of truth first; the plan may predate it or never have
+  looked.
+- **Subagent briefs carry the notes.** Subagents can't see the vault: they
+  don't get `MEMORY.md` or this session's context. Paste the matching note
+  paths and their key rules into every subagent brief. The plugin's
+  PreToolUse hook also appends the top matches to every subagent prompt
+  (`SECOND_BRAIN_SUBAGENT_CONTEXT` in `config.env`: `inject`, the default;
+  `remind`; `deny`; `off`), but it matches on words, so don't rely on it
+  for the key rules.
+- **Nothing found?** Say that no source of truth was found in the vault
+  before you define the metric yourself, and offer to write down the
+  definition you chose (Learning Loop).
+
 ## Vault structure
 
 ```
@@ -78,6 +115,29 @@ A vault may add its own folders (e.g. `Preferences/`, `Health/`). Follow
 | Person | `Full Name.md` | `Jane Smith.md` |
 | Topic | `Topic Name.md` | `Revenue Forecasting.md` |
 | DataContext | `kebab-case-name.md` | `monthly-arr-snapshot.md` |
+
+## Frontmatter for DataContext notes
+
+DataContext notes start with frontmatter. `description` is what lookups
+and the subagent hook match on, so make it say **everything** the note
+covers, not just its first section.
+
+```yaml
+---
+name: usage-vs-plan-sot
+description: Usage vs plan limits for every type (seats, storage, API calls) comes from the billing dashboard; per-type rules and traps
+keywords: [usage vs plan, over plan, overage, seats, storage, api calls, billing dashboard]
+metadata:
+  type: reference
+---
+```
+
+`keywords:` is optional: a list of the nouns, synonyms, and field or table
+names someone would use when they need this note (`[a, b]` or one `- item`
+per line). Multi-word keywords match as phrases, and a single-word keyword
+matches on its own. Add keywords when the filename or description wouldn't
+be found by the words people actually use ("seats" for a note named after
+credits). `/second-brain:dream` suggests them for notes that lack them.
 
 ## Wiki links
 

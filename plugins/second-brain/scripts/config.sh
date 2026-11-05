@@ -20,6 +20,8 @@
 #                                      e.g. a read-only connector tool with a non-standard name
 #   SECOND_BRAIN_JOB_EXTRA_DENY        extra rules the scheduled runs must never use, ;-separated
 #   SECOND_BRAIN_LOG_DIR               scheduled-job logs + state (default ~/Library/Logs/second-brain; for testing)
+#   SECOND_BRAIN_SUBAGENT_CONTEXT      inject|remind|deny|off: what the Agent PreToolUse hook does with
+#                                      matching DataContext notes (default inject; datacontext-match.sh)
 
 SECOND_BRAIN_CONFIG="${SECOND_BRAIN_CONFIG:-$HOME/.claude/second-brain/config.env}"
 if [ -f "$SECOND_BRAIN_CONFIG" ]; then
