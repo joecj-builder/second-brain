@@ -9,7 +9,8 @@ description: >
   adopt or discard. Use when the user says "/dream", "defrag the vault",
   "consolidate memory", "clean up the second brain", or on the weekly
   schedule. Modes: default (full weekly consolidation), --quick (fast
-  MEMORY.md trim + obvious merges), --notify (Slack DM the report; the
+  MEMORY.md trim + obvious merges; what the weekly schedule runs unless
+  SECOND_BRAIN_DREAM_MODE=full), --notify (Slack DM the report; the
   weekly scheduled run only), --worktree (the worktree the scheduled
   runner already created).
 allowed-tools: Bash, Read, Edit, Write
@@ -246,7 +247,9 @@ Skip Steps 2's session-mining, Step 4 (rollup), and Step 5's insight surfacing.
 Do only: trim `MEMORY.md` under limit, promote the `Memory/` inbox, merge
 obvious duplicates, regenerate `Topic-Index.md`. Still runs on the worktree/branch
 and still writes a (shorter) Dream Report. For when the manifest is bloating and
-the user wants a fast defrag.
+the user wants a fast defrag. The weekly scheduled run uses this mode by
+default (the runner passes `--quick` unless `SECOND_BRAIN_DREAM_MODE=full`);
+with `--notify` it still DMs the shorter report.
 
 ## Rules / safety
 

@@ -5,7 +5,8 @@
 # itself is non-destructive: it writes a dream/<YYYY-Wxx> branch in a git
 # worktree under SECOND_BRAIN_DREAM_DIR (default
 # ~/.claude/second-brain/dream-worktrees) for the user to adopt or discard.
-# Passes --notify (Slack DM of the report) when SECOND_BRAIN_SLACK_DM is set.
+# Passes --notify (Slack DM of the report) when SECOND_BRAIN_SLACK_DM is set,
+# and --quick unless SECOND_BRAIN_DREAM_MODE=full.
 #
 # This script commits any pending vault changes ("pre-dream snapshot") and
 # creates the branch and worktree itself, so the run doesn't need
@@ -43,6 +44,17 @@ WORKTREE="$DREAM_DIR/$(basename "$VAULT")-$WEEK"
 # The skill takes everything it needs from these arguments in a scheduled
 # run, so it doesn't have to read config.env (outside the folders it's given).
 prompt="/second-brain:dream --worktree \"$WORKTREE\" --week $WEEK"
+# Quick by default (MEMORY.md trim, inbox, obvious merges, Topic-Index);
+# SECOND_BRAIN_DREAM_MODE=full runs the whole weekly consolidation + rollup.
+case "${SECOND_BRAIN_DREAM_MODE:-quick}" in
+  full) ;;
+  quick) prompt="$prompt --quick" ;;
+  *)
+    sb_log "$LOG_FILE" "ERROR: SECOND_BRAIN_DREAM_MODE must be quick or full (got: $SECOND_BRAIN_DREAM_MODE) in $SECOND_BRAIN_CONFIG"
+    sb_notify "Second brain" "Weekly review skipped: SECOND_BRAIN_DREAM_MODE in config.env must be quick or full."
+    exit 1
+    ;;
+esac
 [ -n "${SECOND_BRAIN_SLACK_DM:-}" ] && prompt="$prompt --notify --slack-dm ${SECOND_BRAIN_SLACK_DM}"
 
 if ! git -C "$VAULT" rev-parse --git-dir >/dev/null 2>&1; then

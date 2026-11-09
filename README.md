@@ -125,8 +125,9 @@ update on their own.
     Granola, Google Calendar, Slack, Gmail, Drive, GitHub, and local Claude
     sessions are available. Missed weekdays are backfilled (up to 5). The
     prompt is `plugins/second-brain/templates/nightly-journal.md`.
-  - `com.second-brain.dream` runs `/second-brain:dream` weekly (default
-    Sunday 9pm).
+  - `com.second-brain.dream` runs `/second-brain:dream --quick` weekly
+    (default Sunday 9pm). Set `SECOND_BRAIN_DREAM_MODE="full"` in
+    `config.env` for the full consolidation and weekly rollup instead.
   - Headless runs can't ask for permission, so each run gets its own allow
     list, written to `~/.claude/second-brain/jobs/<job>-settings.json` and
     passed with `claude -p --settings`. Only the scheduled runs get these

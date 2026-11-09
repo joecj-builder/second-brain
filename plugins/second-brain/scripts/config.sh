@@ -16,6 +16,7 @@
 #   SECOND_BRAIN_JOB_NOTIFY            false = no macOS notifications from the scheduled jobs (default true)
 #   SECOND_BRAIN_DREAM_DIR             folder for weekly dream worktrees (default ~/.claude/second-brain/dream-worktrees);
 #                                      the dream run may only edit inside it
+#   SECOND_BRAIN_DREAM_MODE            quick|full: what the weekly dream runs (default quick = /dream --quick)
 #   SECOND_BRAIN_JOB_EXTRA_ALLOW       extra permission rules for the scheduled runs only, ;-separated,
 #                                      e.g. a read-only connector tool with a non-standard name
 #   SECOND_BRAIN_JOB_EXTRA_DENY        extra rules the scheduled runs must never use, ;-separated

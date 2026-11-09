@@ -143,6 +143,7 @@ unless the user says otherwise:
 | `SECOND_BRAIN_AUTODOC_MIN_PROMPTS` | `3` | Skip sessions shorter than this |
 | `SECOND_BRAIN_SLACK_USER_ID` | filled in step 7 | The user's Slack member ID, for the nightly journal |
 | `SECOND_BRAIN_SLACK_DM` | empty | Slack channel or member ID that `/dream --notify` DMs the weekly report to |
+| `SECOND_BRAIN_DREAM_MODE` | `quick` | What the weekly dream runs: `quick` (trim `MEMORY.md`, promote the inbox, merge obvious duplicates, rebuild the Topic-Index) or `full` (also mines the week's sessions and writes the weekly rollup) |
 | `SECOND_BRAIN_NIGHTLY_JOURNAL_CAP` | `5` | Most missed weekdays one nightly run will catch up |
 | `SECOND_BRAIN_KEEP_AWAKE` | `false` | macOS: keep the Mac awake with the lid closed while Claude works (step 9) |
 | `SECOND_BRAIN_SUBAGENT_CONTEXT` | `inject` | When Claude starts a subagent, add the vault's matching DataContext notes to its brief (`inject`), only remind Claude to (`remind`), refuse the launch until the brief names them (`deny`), or do nothing (`off`) |
